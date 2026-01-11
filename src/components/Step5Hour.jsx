@@ -59,34 +59,41 @@ const Step5Hour = ({ onBack, onSelectDate }) => {
         Horarios disponibles para hoy
       </p>
       <div className="flex overflow-x-auto pb-4 no-scrollbar gap-2">
-        {availablesDates.map((date) => (
-          <button
-            onClick={() => {
-              setSelectedDate(date);
-              setSelectedHour(null);
-            }}
-            className={`border flex-shrink-0 w-20 py-4 rounded-xl flex flex-col items-center transition-colors ${
-              selectedDate?.id === date.id
-                ? "bg-indigo-600 text-white"
-                : "border-slate-200 bg-slate-100 hover:border-indigo-500 hover:bg-indigo-100"
-            }`}
-          >
-            <span
-              className={`text-[10px] font-bold ${
-                selectedDate?.id === date.id ? "text-white" : "opacity-60"
+        {
+          //Boton de selección de DIA de la semana
+          availablesDates.map((date) => (
+            <button
+              onClick={() => {
+                setSelectedDate(date);
+                setSelectedHour(null);
+              }}
+              className={`border flex-shrink-0 w-20 py-4 rounded-xl flex flex-col items-center transition-colors ${
+                selectedDate?.id === date.id
+                  ? "bg-indigo-600 text-white"
+                  : "border-slate-200 bg-slate-100 hover:border-indigo-500 hover:bg-indigo-100"
               }`}
             >
-              {date.label.replace(".", "")}
-            </span>
-            <span
-              className={`text-2xl font-bold ${
-                selectedDate?.id === date.id ? "text-white" : "opacity-60"
-              }`}
-            >
-              {date.day}
-            </span>
-          </button>
-        ))}
+              <span
+                className={`text-[10px] font-bold ${
+                  selectedDate?.id === date.id ? "text-white" : "opacity-60"
+                }`}
+              >
+                {
+                  date.label
+                    .replace(".", "")
+                    .toLocaleUpperCase() /**HOY-MAÑANA-LUN-MAR-MIE */
+                }
+              </span>
+              <span
+                className={`text-2xl font-bold ${
+                  selectedDate?.id === date.id ? "text-white" : "opacity-60"
+                }`}
+              >
+                {date.day /**Dia 7-8-9-10-11 */}
+              </span>
+            </button>
+          ))
+        }
       </div>
       {selectedDate && (
         <div>

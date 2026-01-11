@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { supabase } from "../supabase/conection";
 import {
   ChevronLeft,
   MapPin,
@@ -26,45 +27,48 @@ const Step6Resumen = ({ booking, onBack }) => {
     setClientData({ ...clientData, [name]: value });
   };
   // --- FUNCIÓN FINAL: CONFIRMAR RESERVA ---
-  const handleFinalConfirm = () => {
+  const handleFinalConfirm = async () => {
+    // 1. Activamos el modo "Cargando"
     setIsSubmitting(true);
 
-    // 1. Preparamos el PAQUETE FINAL para la Base de Datos
-    const finalReservation = {
-      // Datos de la Cita
-      reservationDetails: {
-        sedeId: booking.sede.id,
-        sedeNombre: booking.sede.nombre,
-        servicioId: booking.servicio.id,
-        servicioNombre: booking.servicio.nombre,
-        precio: booking.servicio.precio,
-        barberoId: booking.barber.id,
-        barberoNombre: booking.barber.name,
-        fecha: booking.date.id, // YYYY-MM-DD
-        hora: booking.hour,
-      },
-      // Datos del Cliente (Lo nuevo)
-      client: {
-        name: clientData.name,
-        phone: clientData.phone, // Este será su ID único
-        comment: clientData.comment,
-      },
-      // Metadatos
-      status: "pending", // confirmada, cancelada, completada
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      // 2. Preparamos los datos para que coincidan con las COLUMNAS de tu tabla en Supabase
+      // Recuerda: Las columnas se llamaban client_name, client_phone, service, etc.
+      const appointmentToSave = {
+        client_name: clientData.name,
+        client_phone: clientData.phone,
+        sede: booking.sede.nombre,
+        service: booking.servicio.nombre,
+        barber: booking.barber.name,
+        date: booking.date, // Asegúrate que esto sea YYYY-MM-DD
+        hour: booking.hour,
+        status: "pending", // Estado inicial
+      };
 
-    // --- AQUÍ CONECTAREMOS CON EL BACKEND (FIREBASE) LUEGO ---
-    console.log("🚀 ENVIANDO A BASE DE DATOS:", finalReservation);
+      console.log("🚀 Enviando a Supabase...", appointmentToSave);
 
-    // Simulación de espera (2 segundos)
-    setTimeout(() => {
-      alert(
-        `¡Cita Confirmada para ${clientData.name}!\nTe llegará un WhatsApp al ${clientData.phone}`
-      );
+      // 3. LA LLAMADA A LA BASE DE DATOS
+      const { data, error } = await supabase
+        .from("appointments") // Nombre exacto de tu tabla
+        .insert([appointmentToSave]);
+
+      // 4. Manejo de Errores
+      if (error) {
+        throw error; // Si Supabase da error, saltamos al 'catch'
+      }
+
+      // 5. ÉXITO
+      alert(`¡Listo! Reserva guardada en la nube para ${clientData.name}.`);
+
+      // Aquí podrías recargar la página para volver al inicio
+      window.location.reload();
+    } catch (error) {
+      console.error("❌ Error guardando cita:", error.message);
+      alert("Hubo un error al guardar la cita. Intenta de nuevo.");
+    } finally {
+      // Pase lo que pase, apagamos el modo "Cargando"
       setIsSubmitting(false);
-      // Aquí podrías redirigir al inicio o mostrar pantalla de éxito
-    }, 2000);
+    }
   };
 
   // Validación simple: Nombre + Telefono + Terminos
