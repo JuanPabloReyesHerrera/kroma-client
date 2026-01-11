@@ -10,6 +10,8 @@ import { supabase } from "../supabase/conection";
 function BookingFlow() {
   const [dbSedes, setDbSedes] = useState([]);
   const [dbServices, setDbServices] = useState([]);
+  const [dbBarbers, setDbBarbers] = useState([]);
+  const [barberShifts, setBarberShifts] = useState([]); // Los turnos del barbero elegido
 
   // 2. Usa useEffect para cargar datos iniciales (Sedes y Servicios)
   useEffect(() => {
@@ -21,12 +23,28 @@ function BookingFlow() {
       // Pide los servicios a Supabase
       const { data: services } = await supabase.from("services").select("*");
       if (services) setDbServices(services);
+
+      //Pide las barbers a Supabase
+      const { data: barbers } = await supabase.from("barbers").select("*");
+      if (barbers) setDbBarbers(barbers);
     };
 
     cargarDatos();
   }, []); // El array vacío [] significa "haz esto solo una vez al iniciar"
+  // 3. CARGAR TURNOS (NUEVO: Se activa al elegir Barbero)
+  const loadBarberShifts = async (barberId) => {
+    // Pedimos a Supabase: "¿Qué días y horas trabaja este hombre?"
+    const { data } = await supabase
+      .from("work_shifts")
+      .select("*")
+      .eq("barber_id", barberId);
+
+    if (data) setBarberShifts(data);
+  };
+
   console.log("Sedes desde Supabase:", dbSedes);
   console.log("Servicios desde Supabase:", dbServices);
+  console.log("Barber desde Supabase:", dbBarbers);
   // --- ESTADO (MEMORIA) ---
   // Aquí guardaremos qué paso estamos viendo (1, 2, 3...)
   const [step, setStep] = useState(1);
@@ -93,7 +111,7 @@ function BookingFlow() {
         {step === 1 && (
           <Step1Sedes sedes={dbSedes} onSelect={handleSedeSelect} />
         )}
-        {console.log("sede Es " + booking.sede.id)}
+        {console.log("sede Es " + booking.sede?.id)}
 
         {/* Mensaje temporal para cuando avancemos */}
         {step === 2 && (
@@ -112,8 +130,12 @@ function BookingFlow() {
           <Step4Barber
             onSelect={handleBarberSelect}
             onBack={handleBack}
-            categoria={booking.categoria}
-            sede={booking.sede}
+            barbers={dbBarbers.filter(
+              (barber) =>
+                barber.sede_id === booking.sede?.id &&
+                barber.categoria?.includes(booking.categoria)
+            )}
+            category={booking.categoria}
           ></Step4Barber>
         )}
         {step === 5 && (

@@ -1,8 +1,7 @@
 import React from "react";
 import { ChevronLeft, User, StarIcon } from "lucide-react";
-import { barbers } from "../data/db";
 
-const Step4Barber = ({ onBack, onSelect }) => {
+const Step4Barber = ({ onBack, onSelect, barbers }) => {
   return (
     <div className="w-full">
       <button
@@ -15,6 +14,7 @@ const Step4Barber = ({ onBack, onSelect }) => {
       <p className="text-xs text-slate-500 pb-2">
         Basado en tus preferencias y calificaciones de clientes
       </p>
+      {/*Botones de BARBEROS DISPONIBLES */}
       <div className="w-full space-y-2">
         {barbers.map((barber) => (
           <button
@@ -27,13 +27,13 @@ const Step4Barber = ({ onBack, onSelect }) => {
               className="text-slate-600 bg-slate-300 rounded-full p-2"
             ></User>
             <div className="flex-1">
-              <p className="font-bold">{barber.name}</p>
+              <p className="font-bold">{barber.nombre}</p>
               <p className="text-xs text-slate-500">{barber.especialidad}</p>
             </div>
             <div className="flex flex-col items-end">
               <div className="flex items-center gap-1">
                 <span className="font-bold text-sm text-slate-700">
-                  {barber.rating}
+                  {barber.rating_promedio}
                 </span>
                 <StarIcon
                   size={16}
@@ -41,7 +41,7 @@ const Step4Barber = ({ onBack, onSelect }) => {
                 />
               </div>
               <span className="text-xs text-slate-400">
-                ({barber.reviews} reseñas)
+                ({barber.total_reviews} reseñas)
               </span>
             </div>
           </button>
