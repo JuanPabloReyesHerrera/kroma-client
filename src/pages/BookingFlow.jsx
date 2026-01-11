@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { sedes, servicios } from "../data/db"; // 1. Importamos las sedes de db.js
 import Step1Sedes from "../components/Step1Sedes"; // 2. Importamos el componente visual
 import Step2Category from "../components/Step2Category";
 import Step3Service from "../components/Step3Service";
@@ -9,10 +8,28 @@ import Step6Resumen from "../components/Step6Resumen";
 import { supabase } from "../supabase/conection";
 
 function BookingFlow() {
+  const [dbSedes, setDbSedes] = useState([]);
+  const [dbServices, setDbServices] = useState([]);
+
+  // 2. Usa useEffect para cargar datos iniciales (Sedes y Servicios)
+  useEffect(() => {
+    const cargarDatos = async () => {
+      // Pide las sedes a Supabase
+      const { data: sedes } = await supabase.from("sedes").select("*");
+      if (sedes) setDbSedes(sedes);
+
+      // Pide los servicios a Supabase
+      const { data: services } = await supabase.from("services").select("*");
+      if (services) setDbServices(services);
+    };
+
+    cargarDatos();
+  }, []); // El array vacío [] significa "haz esto solo una vez al iniciar"
+  console.log("Sedes desde Supabase:", dbSedes);
+  console.log("Servicios desde Supabase:", dbServices);
   // --- ESTADO (MEMORIA) ---
   // Aquí guardaremos qué paso estamos viendo (1, 2, 3...)
   const [step, setStep] = useState(1);
-
   // Aquí guardaremos las elecciones del usuario
   const [booking, setBooking] = useState({
     sede: null,
@@ -70,11 +87,13 @@ function BookingFlow() {
         <h1 className="text-2xl font-bold text-slate-800">Reserva tu Cita</h1>
         <p className="text-slate-500 text-sm">ꓘROMA</p>
       </div>
-
       {/* Contenedor Principal (La "Caja Blanca") */}
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 border border-slate-100">
         {/* CONDICIONAL: Si el paso es 1, muestra el componente de Sedes */}
-        {step === 1 && <Step1Sedes sedes={sedes} onSelect={handleSedeSelect} />}
+        {step === 1 && (
+          <Step1Sedes sedes={dbSedes} onSelect={handleSedeSelect} />
+        )}
+        {console.log("sede Es " + booking.sede.id)}
 
         {/* Mensaje temporal para cuando avancemos */}
         {step === 2 && (
@@ -84,7 +103,9 @@ function BookingFlow() {
           <Step3Service
             onSelect={handleServiceSelect}
             onBack={handleBack}
-            category={booking.categoria}
+            servicesList={dbServices.filter(
+              (serv) => serv.categoria === booking.categoria
+            )}
           />
         )}
         {step === 4 && (
