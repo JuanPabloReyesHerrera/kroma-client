@@ -1,54 +1,78 @@
 import React, { useState, useEffect } from "react";
-import Step1Sedes from "../components/Step1Sedes"; // 2. Importamos el componente visual
+import Step1Sedes from "../components/Step1Sedes";
 import Step2Category from "../components/Step2Category";
 import Step3Service from "../components/Step3Service";
 import Step4Barber from "../components/Step4Barber";
 import Step5Hour from "../components/Step5Hour";
 import Step6Resumen from "../components/Step6Resumen";
 import { supabase } from "../supabase/conection";
+import { Clock, Loader2 } from "lucide-react"; // Agregamos Loader2
 
 function BookingFlow() {
   const [dbSedes, setDbSedes] = useState([]);
   const [dbServices, setDbServices] = useState([]);
   const [dbBarbers, setDbBarbers] = useState([]);
-  const [barberShifts, setBarberShifts] = useState([]); // Los turnos del barbero elegido
+  const [barberShifts, setBarberShifts] = useState([]);
 
-  // 2. Usa useEffect para cargar datos iniciales (Sedes y Servicios)
+  // --- NUEVO ESTADO DE CARGA ---
+  const [loading, setLoading] = useState(false);
+
+  // 2. Usa useEffect para cargar datos iniciales
   useEffect(() => {
     const cargarDatos = async () => {
-      // Pide las sedes a Supabase
-      const { data: sedes } = await supabase.from("sedes").select("*");
-      if (sedes) setDbSedes(sedes);
+      setLoading(true); // 🟢 ACTIVAMOS CARGA
+      try {
+        // Pide las sedes a Supabase
+        const { data: sedes } = await supabase.from("sedes").select("*");
+        if (sedes) setDbSedes(sedes);
 
-      // Pide los servicios a Supabase
-      const { data: services } = await supabase.from("services").select("*");
-      if (services) setDbServices(services);
+        // Pide los servicios a Supabase
+        const { data: services } = await supabase.from("services").select("*");
+        if (services) setDbServices(services);
 
-      //Pide las barbers a Supabase
-      const { data: barbers } = await supabase.from("barbers").select("*");
-      if (barbers) setDbBarbers(barbers);
+        // Pide las barbers a Supabase
+        const { data: barbers } = await supabase.from("barbers").select("*");
+        if (barbers) setDbBarbers(barbers);
+      } catch (error) {
+        console.error("Error cargando datos iniciales:", error);
+      } finally {
+        setLoading(false); // 🔴 DESACTIVAMOS CARGA
+      }
     };
 
     cargarDatos();
-  }, []); // El array vacío [] significa "haz esto solo una vez al iniciar"
-  // 3. CARGAR TURNOS (NUEVO: Se activa al elegir Barbero)
-  const loadBarberShifts = async (barberId) => {
-    // Pedimos a Supabase: "¿Qué días y horas trabaja este hombre?"
-    const { data } = await supabase
-      .from("work_shifts")
-      .select("*")
-      .eq("barber_id", barberId);
+  }, []);
 
-    if (data) setBarberShifts(data);
+  // 3. CARGAR TURNOS
+  const loadBarberShifts = async (barberId) => {
+    console.log("⏳ Cargando turnos para barbero ID:", barberId);
+    setLoading(true); // 🟢 ACTIVAMOS CARGA
+
+    try {
+      const { data, error } = await supabase
+        .from("work_shifts")
+        .select("*")
+        .eq("barber_id", barberId);
+
+      if (error) {
+        console.error("Error cargando turnos:", error);
+      } else {
+        console.log("✅ Turnos encontrados:", data);
+        setBarberShifts(data || []);
+      }
+    } catch (error) {
+      console.error("Error en loadBarberShifts:", error);
+    } finally {
+      setLoading(false); // 🔴 DESACTIVAMOS CARGA
+    }
   };
 
   console.log("Sedes desde Supabase:", dbSedes);
   console.log("Servicios desde Supabase:", dbServices);
   console.log("Barber desde Supabase:", dbBarbers);
+
   // --- ESTADO (MEMORIA) ---
-  // Aquí guardaremos qué paso estamos viendo (1, 2, 3...)
   const [step, setStep] = useState(1);
-  // Aquí guardaremos las elecciones del usuario
   const [booking, setBooking] = useState({
     sede: null,
     categoria: null,
@@ -57,18 +81,17 @@ function BookingFlow() {
     date: null,
     hour: null,
   });
+
   useEffect(() => {
     console.log("Estado actualizado:", booking);
   }, [booking]);
 
   // --- FUNCIONES (LÓGICA) ---
   const handleSedeSelect = (sedeSelectioned) => {
-    // 1. Guardamos la sede en la "memoria"
     setBooking({ ...booking, sede: sedeSelectioned });
     setStep(2);
   };
   const handleCategorySelect = (categorySelection) => {
-    // 1. Guardamos hombre o mujer
     setBooking({ ...booking, categoria: categorySelection });
     setStep(3);
   };
@@ -78,9 +101,12 @@ function BookingFlow() {
     setStep(4);
   };
 
-  const handleBarberSelect = (barberSlection) => {
-    setBooking({ ...booking, barber: barberSlection });
-    setStep(5);
+  const handleBarberSelect = (barberSelected) => {
+    setBooking({ ...booking, barber: barberSelected });
+    // Al ser una promesa, el loading se manejará dentro de la función loadBarberShifts
+    loadBarberShifts(barberSelected.id).then(() => {
+      setStep(5);
+    });
   };
 
   const handleHourSelect = (hourSelection) => {
@@ -93,30 +119,39 @@ function BookingFlow() {
   };
 
   const handleBack = () => {
-    // Si estamos en el paso 2, volvemos al 1
     setStep(step - 1);
   };
+
   console.log("📡 Conexión a Supabase:", supabase);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4 font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pb-32 font-sans relative">
+      {/* --- NUEVO: PANTALLA DE CARGA (OVERLAY) --- */}
+      {loading && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex flex-col items-center justify-center animate-in fade-in duration-200">
+          <div className="bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+            <p className="text-slate-600 font-bold text-sm">Cargando...</p>
+          </div>
+        </div>
+      )}
+
       {/* Header Simple */}
       <div className="w-full max-w-md mt-4 mb-8 text-center">
         <h1 className="text-2xl font-bold text-slate-800">Reserva tu Cita</h1>
         <p className="text-slate-500 text-sm">ꓘROMA</p>
       </div>
+
       {/* Contenedor Principal (La "Caja Blanca") */}
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 border border-slate-100">
-        {/* CONDICIONAL: Si el paso es 1, muestra el componente de Sedes */}
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 border border-slate-100 relative z-10">
         {step === 1 && (
           <Step1Sedes sedes={dbSedes} onSelect={handleSedeSelect} />
         )}
-        {console.log("sede Es " + booking.sede?.id)}
 
-        {/* Mensaje temporal para cuando avancemos */}
         {step === 2 && (
           <Step2Category onSelect={handleCategorySelect} onBack={handleBack} />
         )}
+
         {step === 3 && (
           <Step3Service
             onSelect={handleServiceSelect}
@@ -126,6 +161,7 @@ function BookingFlow() {
             )}
           />
         )}
+
         {step === 4 && (
           <Step4Barber
             onSelect={handleBarberSelect}
@@ -138,15 +174,58 @@ function BookingFlow() {
             category={booking.categoria}
           ></Step4Barber>
         )}
+
         {step === 5 && (
           <Step5Hour
             onSelectDate={handleHourSelect}
             onBack={handleBack}
+            barberShifts={barberShifts}
+            barberId={booking.barber?.id}
+            serviceDuration={booking.servicio?.duracion_min}
           ></Step5Hour>
         )}
+
         {step === 6 && (
           <Step6Resumen booking={booking} onBack={handleBack}></Step6Resumen>
         )}
+      </div>
+
+      {/* Info Flotante */}
+      <div className="fixed bottom-6 w-full max-w-md left-0 right-0 mx-auto px-4 pointer-events-none z-50">
+        <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl flex justify-between items-center pointer-events-auto shadow-2xl border border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-600 rounded-lg">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div className="text-xs">
+              <p>
+                <span className="font-bold">Estado del Local:</span>
+                <span className="font-bold text-indigo-400">
+                  {" "}
+                  Abierto {" " /* Indicador animado de abierto */}
+                  <span className="relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                </span>
+              </p>
+
+              <p className=" text-[10px]">
+                <span className="opacity-70">Lun a Sab: </span>
+                <span className="font-bold text-indigo-400">8am-9pm</span>
+                <span className="font-bold">, </span>
+                <span className="opacity-70">Dom: </span>
+                <span className="font-bold text-indigo-400">10am-4pm </span>
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase font-bold text-indigo-400">
+              Ubicación
+            </p>
+            <p className="text-xs font-medium">Trinidad, Bolivia</p>
+          </div>
+        </div>
       </div>
     </div>
   );

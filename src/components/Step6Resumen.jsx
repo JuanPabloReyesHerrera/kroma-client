@@ -100,7 +100,7 @@ const Step6Resumen = ({ booking, onBack }) => {
           <span className="font-medium text-slate-700">
             {booking.servicio?.nombre} —{" "}
             <span className="text-indigo-600 font-bold">
-              {booking.servicio?.precio}
+              {booking.servicio?.precio_actual} BOB
             </span>
           </span>
         </div>
@@ -113,7 +113,7 @@ const Step6Resumen = ({ booking, onBack }) => {
         <div className="flex items-center gap-3 text-sm">
           <User className="w-4 h-4 text-indigo-600 shrink-0" />
           <span className="font-medium text-slate-700">
-            Con {booking.barber?.name}
+            Con {booking.barber?.nombre}
           </span>
         </div>
       </div>
