@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import MyAppointments from "../components/MyAppointments";
 import Step1Sedes from "../components/Step1Sedes";
 import Step2Category from "../components/Step2Category";
 import Step3Service from "../components/Step3Service";
@@ -6,13 +7,14 @@ import Step4Barber from "../components/Step4Barber";
 import Step5Hour from "../components/Step5Hour";
 import Step6Resumen from "../components/Step6Resumen";
 import { supabase } from "../supabase/conection";
-import { Clock, Loader2 } from "lucide-react"; // Agregamos Loader2
+import { Clock, Loader2, Calendar } from "lucide-react"; // Agregamos Loader2
 
 function BookingFlow() {
   const [dbSedes, setDbSedes] = useState([]);
   const [dbServices, setDbServices] = useState([]);
   const [dbBarbers, setDbBarbers] = useState([]);
   const [barberShifts, setBarberShifts] = useState([]);
+  const [view, setView] = useState("booking"); // 'booking' o 'my-appointments'`
 
   // --- NUEVO ESTADO DE CARGA ---
   const [loading, setLoading] = useState(false);
@@ -144,49 +146,75 @@ function BookingFlow() {
 
       {/* Contenedor Principal (La "Caja Blanca") */}
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 border border-slate-100 relative z-10">
-        {step === 1 && (
-          <Step1Sedes sedes={dbSedes} onSelect={handleSedeSelect} />
-        )}
-
-        {step === 2 && (
-          <Step2Category onSelect={handleCategorySelect} onBack={handleBack} />
-        )}
-
-        {step === 3 && (
-          <Step3Service
-            onSelect={handleServiceSelect}
-            onBack={handleBack}
-            servicesList={dbServices.filter(
-              (serv) => serv.categoria === booking.categoria
+        {view === "my-appointments" ? (
+          <MyAppointments onBack={() => setView("booking")} />
+        ) : (
+          <>
+            {step === 1 && (
+              <Step1Sedes sedes={dbSedes} onSelect={handleSedeSelect} />
             )}
-          />
-        )}
-
-        {step === 4 && (
-          <Step4Barber
-            onSelect={handleBarberSelect}
-            onBack={handleBack}
-            barbers={dbBarbers.filter(
-              (barber) =>
-                barber.sede_id === booking.sede?.id &&
-                barber.categoria?.includes(booking.categoria)
+            {step === 1 && (
+              <div className="my-6 border-t border-slate-200 items-center flex flex-col">
+                <h3 className="text-slate-700 font-bold mb-4 items-center flex justify-center gap-2 mt-6">
+                  ¿Ya tienes una cita?
+                </h3>
+                <button
+                  onClick={() => setView("my-appointments")}
+                  className="w-full max-w-80 mb-6 py-5 mt-5 bg-indigo-50 hover:bg-indigo-500 hover:text-white text-indigo-700 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-indigo-200"
+                >
+                  <Calendar size={18} />
+                  Ver mis reservas existentes
+                </button>
+              </div>
             )}
-            category={booking.categoria}
-          ></Step4Barber>
-        )}
 
-        {step === 5 && (
-          <Step5Hour
-            onSelectDate={handleHourSelect}
-            onBack={handleBack}
-            barberShifts={barberShifts}
-            barberId={booking.barber?.id}
-            serviceDuration={booking.servicio?.duracion_min}
-          ></Step5Hour>
-        )}
+            {step === 2 && (
+              <Step2Category
+                onSelect={handleCategorySelect}
+                onBack={handleBack}
+              />
+            )}
 
-        {step === 6 && (
-          <Step6Resumen booking={booking} onBack={handleBack}></Step6Resumen>
+            {step === 3 && (
+              <Step3Service
+                onSelect={handleServiceSelect}
+                onBack={handleBack}
+                servicesList={dbServices.filter(
+                  (serv) => serv.categoria === booking.categoria
+                )}
+              />
+            )}
+
+            {step === 4 && (
+              <Step4Barber
+                onSelect={handleBarberSelect}
+                onBack={handleBack}
+                barbers={dbBarbers.filter(
+                  (barber) =>
+                    barber.sede_id === booking.sede?.id &&
+                    barber.categoria?.includes(booking.categoria)
+                )}
+                category={booking.categoria}
+              ></Step4Barber>
+            )}
+
+            {step === 5 && (
+              <Step5Hour
+                onSelectDate={handleHourSelect}
+                onBack={handleBack}
+                barberShifts={barberShifts}
+                barberId={booking.barber?.id}
+                serviceDuration={booking.servicio?.duracion_min}
+              ></Step5Hour>
+            )}
+
+            {step === 6 && (
+              <Step6Resumen
+                booking={booking}
+                onBack={handleBack}
+              ></Step6Resumen>
+            )}
+          </>
         )}
       </div>
 
