@@ -137,7 +137,7 @@ const Step5Hour = ({
   const handleConfirm = () => {
     if (selectedDate && selectedHour) {
       const bookingData = {
-        date: selectedDate.full, // IMPORTANTE: Usamos .id (YYYY-MM-DD) para la base de datos
+        date: selectedDate.id, // IMPORTANTE: Usamos .id (YYYY-MM-DD) para la base de datos
         displayDate: selectedDate.full, // Guardamos el nombre bonito por si acaso
         hour: selectedHour,
       };

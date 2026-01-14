@@ -8,10 +8,10 @@ import {
   User,
   UserIcon,
   Phone,
+  Loader2,
 } from "lucide-react";
 
 const Step6Resumen = ({ booking, onBack }) => {
-  // --- ESTADOS DEL FORMULARIO DE CLIENTE ---
   const [clientData, setClientData] = useState({
     name: "",
     phone: "",
@@ -19,71 +19,95 @@ const Step6Resumen = ({ booking, onBack }) => {
   });
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Para efecto de carga
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Manejador de inputs genérico
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setClientData({ ...clientData, [name]: value });
   };
-  // --- FUNCIÓN FINAL: CONFIRMAR RESERVA ---
+
+  // Función para poner "Juan Pablo" bonito (Capitalizar)
+  const formatName = (name) => {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
   const handleFinalConfirm = async () => {
-    // 1. Activamos el modo "Cargando"
     setIsSubmitting(true);
 
     try {
-      // 2. Preparamos los datos para que coincidan con las COLUMNAS de tu tabla en Supabase
-      // Recuerda: Las columnas se llamaban client_name, client_phone, service, etc.
+      // 1. LIMPIEZA DE DATOS
+      const cleanName = formatName(clientData.name);
+      const cleanPhone = clientData.phone.replace(/\D/g, ""); // Solo números
+
+      // 2. GESTIÓN DE CLIENTE (UPSERT)
+      // Buscamos o creamos al cliente en la tabla 'clients'
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .upsert(
+          { nombre: cleanName, telefono: cleanPhone },
+          { onConflict: "telefono" } // La clave es el teléfono
+        )
+        .select()
+        .single();
+
+      if (clientError) throw new Error(`Error cliente: ${clientError.message}`);
+
+      // 3. PREPARAR CITA
+      // Solo usamos las columnas que existen en tu base de datos SQL
       const appointmentToSave = {
-        client_name: clientData.name,
-        client_phone: clientData.phone,
-        sede: booking.sede.nombre,
-        service: booking.servicio.nombre,
-        barber: booking.barber.name,
-        date: booking.date, // Asegúrate que esto sea YYYY-MM-DD
-        hour: booking.hour,
-        status: "pending", // Estado inicial
+        client_id: client.id, // EL VÍNCULO IMPORTANTE
+        barber_id: booking.barber.id,
+        sede_id: booking.sede.id,
+        service_id: booking.servicio.id,
+
+        // Snapshots (Datos congelados)
+        price_snapshot: booking.servicio.precio_actual,
+        service_name_snapshot: booking.servicio.nombre,
+
+        // Tiempo
+        fecha: booking.date, // Debe ser YYYY-MM-DD
+        hora_inicio: booking.hour,
+
+        status: "pending",
+        comentario_cliente: clientData.comment, // Tu comentario opcional
       };
 
-      console.log("🚀 Enviando a Supabase...", appointmentToSave);
+      console.log("🚀 Enviando a Supabase:", appointmentToSave);
 
-      // 3. LA LLAMADA A LA BASE DE DATOS
-      const { data, error } = await supabase
-        .from("appointments") // Nombre exacto de tu tabla
+      const { error: apptError } = await supabase
+        .from("appointments")
         .insert([appointmentToSave]);
 
-      // 4. Manejo de Errores
-      if (error) {
-        throw error; // Si Supabase da error, saltamos al 'catch'
-      }
+      if (apptError) throw new Error(`Error cita: ${apptError.message}`);
 
-      // 5. ÉXITO
-      alert(`¡Listo! Reserva guardada en la nube para ${clientData.name}.`);
-
-      // Aquí podrías recargar la página para volver al inicio
+      // ÉXITO
+      alert(`¡Reserva confirmada! Gracias ${cleanName}.`);
       window.location.reload();
     } catch (error) {
-      console.error("❌ Error guardando cita:", error.message);
-      alert("Hubo un error al guardar la cita. Intenta de nuevo.");
+      console.error("❌ Error:", error);
+      alert("Hubo un problema: " + error.message);
     } finally {
-      // Pase lo que pase, apagamos el modo "Cargando"
       setIsSubmitting(false);
     }
   };
 
-  // Validación simple: Nombre + Telefono + Terminos
   const isValid =
     clientData.name.length > 2 && clientData.phone.length > 7 && acceptedTerms;
+
   return (
     <div>
-      {/* Botton VOLVER */}
       <button
         onClick={onBack}
         className="flex items-center text-slate-500 hover:text-indigo-500"
       >
         <ChevronLeft size={20} /> Volver
       </button>
+
       <h3 className="text-xl font-bold flex gap-2 my-2">Finaliza tu reserva</h3>
+
       {/* Resumen de la reserva */}
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 space-y-3">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
@@ -100,7 +124,7 @@ const Step6Resumen = ({ booking, onBack }) => {
           <span className="font-medium text-slate-700">
             {booking.servicio?.nombre} —{" "}
             <span className="text-indigo-600 font-bold">
-              {booking.servicio?.precio_actual} BOB
+              {booking.servicio?.precio_actual} Bs
             </span>
           </span>
         </div>
@@ -117,9 +141,9 @@ const Step6Resumen = ({ booking, onBack }) => {
           </span>
         </div>
       </div>
-      {/* 2. FORMULARIO DE REGISTRO */}
+
+      {/* Formulario */}
       <div className="space-y-4">
-        {/* Input Nombre */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
             Tu Nombre Completo
@@ -139,7 +163,7 @@ const Step6Resumen = ({ booking, onBack }) => {
             />
           </div>
         </div>
-        {/* Input Numero */}
+
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
             Número de WhatsApp
@@ -159,7 +183,7 @@ const Step6Resumen = ({ booking, onBack }) => {
             Sin código de país, solo el número.
           </p>
         </div>
-        {/* Comentario Opcional, CheckBox Y Confirmar */}
+
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
             ¿Algún pedido especial? (Opcional)
@@ -172,8 +196,8 @@ const Step6Resumen = ({ booking, onBack }) => {
             placeholder="Ej: Tengo el cabello muy largo..."
             className="w-full p-3 border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors resize-none"
           />
-          {/* Checkbox Legal */}
-          <label className="flex gap-3 items-start p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+
+          <label className="flex gap-3 items-start p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors mt-2">
             <input
               type="checkbox"
               checked={acceptedTerms}
@@ -181,11 +205,10 @@ const Step6Resumen = ({ booking, onBack }) => {
               className="mt-1 w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
             />
             <span className="text-xs text-slate-500 leading-tight">
-              Acepto recibir recordatorios de mi cita y promociones exclusivas
-              de KROMA al WhatsApp proporcionado.
+              Acepto recibir recordatorios de mi cita y promociones exclusivas.
             </span>
           </label>
-          {/* 3. BOTÓN FINAL */}
+
           <div className="mt-8 space-y-3">
             <button
               onClick={handleFinalConfirm}
@@ -199,11 +222,18 @@ const Step6Resumen = ({ booking, onBack }) => {
                 }
             `}
             >
-              {isSubmitting ? <>Agendando...</> : <>Finalizar Reserva</>}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} /> Procesando...
+                </>
+              ) : (
+                <>Finalizar Reserva</>
+              )}
             </button>
 
             <button
               onClick={onBack}
+              disabled={isSubmitting}
               className="w-full text-slate-400 py-2 text-sm hover:text-indigo-600"
             >
               Volver atrás
@@ -214,4 +244,5 @@ const Step6Resumen = ({ booking, onBack }) => {
     </div>
   );
 };
+
 export default Step6Resumen;

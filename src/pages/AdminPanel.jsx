@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "../supabase/conection";
 import {
   User,
   Clock,
@@ -84,6 +85,46 @@ const AdminPanel = () => {
     e.preventDefault();
     if (credentials.user && credentials.pass) setIsLoggedIn(true);
   };
+  // --- SONIDO DE NOTIFICACIÓN ---
+  const playSound = () => {
+    const audio = new Audio(
+      "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+    );
+    audio
+      .play()
+      .catch((e) =>
+        console.log("El navegador bloqueó el sonido automático", e)
+      );
+  };
+
+  useEffect(() => {
+    // ... tu lógica de autenticación existente ...
+
+    // --- ESCUCHA EN TIEMPO REAL (REALTIME) ---
+    const channel = supabase
+      .channel("cambios-citas") // Nombre del canal (cualquiera sirve)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT", // Escuchar solo NUEVAS citas
+          schema: "public",
+          table: "appointments",
+          // Opcional: filter: `barber_id=eq.${session.user.id}` // Escuchar solo mis citas
+        },
+        (payload) => {
+          console.log("🔔 ¡Nueva Cita!", payload);
+          playSound(); // 🔊 Ding!
+          alert(`¡Nueva reserva recibida de ${payload.new.client_name}!`);
+          fetchTodaysData(); // Recargamos la lista automáticamente
+        }
+      )
+      .subscribe();
+
+    return () => {
+      // Limpieza al salir
+      supabase.removeChannel(channel);
+    };
+  }, []); // Dependencias
 
   if (!isLoggedIn) {
     return (
