@@ -12,6 +12,7 @@ const LoginAdmin = ({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-xl">
+        {/**Titulo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black text-slate-800 italic tracking-tighter mb-1">
             ꓘROMA{" "}

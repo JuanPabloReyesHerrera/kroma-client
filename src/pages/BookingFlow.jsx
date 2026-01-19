@@ -202,7 +202,7 @@ function BookingFlow() {
                 onSelect={handleServiceSelect}
                 onBack={handleBack}
                 servicesList={dbServices.filter(
-                  (serv) => serv.categoria === booking.categoria
+                  (serv) => serv.categoria === booking.categoria,
                 )}
               />
             )}
@@ -214,7 +214,7 @@ function BookingFlow() {
                 barbers={dbBarbers.filter(
                   (barber) =>
                     barber.sede_id === booking.sede?.id &&
-                    barber.categoria?.includes(booking.categoria)
+                    barber.categoria?.includes(booking.categoria),
                 )}
                 category={booking.categoria}
               ></Step4Barber>
