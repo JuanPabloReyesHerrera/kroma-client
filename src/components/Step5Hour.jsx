@@ -7,6 +7,7 @@ const Step5Hour = ({
   onSelectDate,
   barberShifts = [],
   barberId,
+  barberName,
   serviceDuration,
 }) => {
   // Estado original
@@ -157,8 +158,18 @@ const Step5Hour = ({
         <Calendar className="text-indigo-500 font-bold" />
         ¿Cuándo vienes?
       </h3>
-      <p className="text-xs text-slate-500 pb-2 ">
-        Duración estimada: {serviceDuration || 45} min
+      <p className="flex justify-between items-center text-slate-600 mb-4 px-2 py-1">
+        <span className="text-xs font-medium text-slate-500">
+          Barbero:
+          {
+            <span className="text-indigo-500 font-bold ml-1">
+              {barberName || "No asignado"}
+            </span>
+          }
+        </span>
+        <span className="text-xs text-slate-500">
+          Duración estimada: {serviceDuration || 45} min
+        </span>
       </p>
 
       {/* CARRUSEL DE DÍAS */}

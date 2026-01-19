@@ -1,7 +1,7 @@
 import React from "react";
 import { RefreshCw } from "lucide-react";
 
-const AdminLogin = ({
+const LoginAdmin = ({
   email,
   setEmail,
   password,
@@ -50,6 +50,7 @@ const AdminLogin = ({
           </div>
           <button
             disabled={loading}
+            onClick={(e) => handleLogin(e)}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-95 mt-4 flex justify-center"
           >
             {loading ? <RefreshCw className="animate-spin" /> : "Ingresar"}
@@ -60,4 +61,4 @@ const AdminLogin = ({
   );
 };
 
-export default AdminLogin;
+export default LoginAdmin;

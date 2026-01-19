@@ -131,7 +131,7 @@ const Step6Resumen = ({ booking, onBack }) => {
         <div className="flex items-center gap-3 text-sm">
           <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
           <span className="font-medium text-slate-700">
-            {booking?.date} a las {booking?.hour}
+            {booking?.day} a las {booking?.hour}
           </span>
         </div>
         <div className="flex items-center gap-3 text-sm">

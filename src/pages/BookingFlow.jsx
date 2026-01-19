@@ -8,6 +8,7 @@ import Step5Hour from "../components/Step5Hour";
 import Step6Resumen from "../components/Step6Resumen";
 import { supabase } from "../supabase/conection";
 import { Clock, Loader2, Calendar } from "lucide-react"; // Agregamos Loader2
+import barberpole from "../assets/barberPole.png";
 
 function BookingFlow() {
   const [dbSedes, setDbSedes] = useState([]);
@@ -82,6 +83,7 @@ function BookingFlow() {
     barber: null,
     date: null,
     hour: null,
+    day: null,
   });
 
   useEffect(() => {
@@ -116,6 +118,7 @@ function BookingFlow() {
       ...booking,
       hour: hourSelection.hour,
       date: hourSelection.date,
+      day: hourSelection.displayDate,
     });
     setStep(6);
   };
@@ -139,9 +142,28 @@ function BookingFlow() {
       )}
 
       {/* Header Simple */}
-      <div className="w-full max-w-md mt-4 mb-8 text-center">
-        <h1 className="text-2xl font-bold text-slate-800">Reserva tu Cita</h1>
-        <p className="text-slate-500 text-sm">ꓘROMA</p>
+      <div className="w-full max-w-md mt-4 mb-8 text-center flex flex-col items-center">
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">
+          Reserva tu Cita
+        </h1>
+        {/* CONTENEDOR CENTRAL (El Truco) */}
+        {/* relative: Para que la imagen se posicione respecto a este texto y no a la pantalla */}
+        <div className="relative">
+          <h1 className="text-5xl font-bold">Nueva Imagen</h1>
+          {/* LA IMAGEN (Flotando a la derecha) */}
+          {/* absolute: La sacamos del flujo para que no empuje el texto */}
+          {/* left-full: La pone justo donde termina el texto */}
+          {/* top-1/2 -translate-y-1/2: La centra verticalmente respecto al texto */}
+          {/* ml-4: Es el 'gap' manual */}
+          <div className="absolute left-full top-1/2 -translate-y-1/2 ml-1 w-12 h-32 rounded-full overflow-hidden rotate-12">
+            <img
+              src={barberpole}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+        </div>
+        <p className="text-slate-500 mt-4 text-sm">ꓘROMA</p>
       </div>
 
       {/* Contenedor Principal (La "Caja Blanca") */}
@@ -204,6 +226,7 @@ function BookingFlow() {
                 onBack={handleBack}
                 barberShifts={barberShifts}
                 barberId={booking.barber?.id}
+                barberName={booking.barber?.nombre}
                 serviceDuration={booking.servicio?.duracion_min}
               ></Step5Hour>
             )}
