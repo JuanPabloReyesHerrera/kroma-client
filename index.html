@@ -10,6 +10,24 @@
 
     <!-- Color de la barra de estado en móviles -->
     <meta name="theme-color" content="#4f46e5" />
+
+    <!-- CÓDIGO DE ONESIGNAL (Inyectado aquí en el HEAD) -->
+    <script
+      src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+      defer
+    ></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function (OneSignal) {
+        await OneSignal.init({
+          appId: "128db51b-71f3-43aa-9013-216d850adf12", // Tu App ID
+          allowLocalhostAsSecureOrigin: true, // ¡IMPORTANTE para probar en tu PC!
+          notifyButton: {
+            enable: false, // Muestra la campanita de suscripción automáticamente
+          },
+        });
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
