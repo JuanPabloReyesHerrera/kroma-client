@@ -1,14 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase/conection";
-import {
-  User,
-  Calendar,
-  BarChart3,
-  LogOut,
-  Bell,
-  BellRing,
-  Radio,
-} from "lucide-react";
+import { User, Calendar, BarChart3, BellRing } from "lucide-react";
 
 // Componentes locales
 import LoginAdmin from "../components/barberPanel/LoginAdmin";
@@ -16,96 +8,57 @@ import AgendAdmin from "../components/barberPanel/AgendAdmin";
 import MetasAdmin from "../components/barberPanel/MetasAdmin";
 import PerfilAdmin from "../components/barberPanel/PerfilAdmin";
 
+/**
+ * AdminPanel Component
+ * Integra Supabase Realtime y OneSignal para notificaciones profesionales.
+ */
 const AdminPanel = () => {
   // --- ESTADOS ---
   const [session, setSession] = useState(null);
   const [barberProfile, setBarberProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // Datos
+  // Datos de Negocio
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState({ cortesHoy: 0, gananciaHoy: 0 });
-
-  // UI
   const [activeTab, setActiveTab] = useState("agenda");
+
+  // Formulario de Login
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Notificaciones & Background
-  const [permission, setPermission] = useState(Notification.permission);
-  const [isBackgroundModeOn, setIsBackgroundModeOn] = useState(false);
-  const silentAudioRef = useRef(null);
+  // ID de OneSignal
+  const [oneSignalId, setOneSignalId] = useState(null);
 
-  // --- FUNCIÓN: SOLICITAR PERMISOS ---
-  const requestNotificationPermission = async () => {
-    if (!("Notification" in window)) {
-      alert("Tu navegador no soporta notificaciones.");
-      return;
+  // --- 1. CONFIGURACIÓN ONESIGNAL ---
+  useEffect(() => {
+    if (window.OneSignalDeferred) {
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        // Obtener ID de suscripción
+        const userId = await OneSignal.User.PushSubscription.id;
+        if (userId) {
+          console.log("✅ OneSignal User ID:", userId);
+          setOneSignalId(userId);
+        }
+
+        // Listener para cambios en la suscripción
+        OneSignal.User.PushSubscription.addEventListener("change", (event) => {
+          if (event.current.id) setOneSignalId(event.current.id);
+        });
+      });
     }
+  }, []);
 
-    const result = await Notification.requestPermission();
-    setPermission(result);
-
-    if (result === "granted") {
-      new Notification("¡Notificaciones activadas!", {
-        body: "Ahora activa el 'Modo Segundo Plano' para recibir alertas con el celular bloqueado.",
-        icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
+  const requestOSPermission = () => {
+    if (window.OneSignalDeferred) {
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        await OneSignal.Notifications.requestPermission();
       });
     }
   };
 
-  // --- FUNCIÓN: ACTIVAR SEGUNDO PLANO (KEEP ALIVE) ---
-  const toggleBackgroundMode = () => {
-    if (silentAudioRef.current) {
-      if (isBackgroundModeOn) {
-        silentAudioRef.current.pause();
-        setIsBackgroundModeOn(false);
-      } else {
-        // Reproducimos silencio para mantener el hilo de JS activo
-        silentAudioRef.current
-          .play()
-          .then(() => {
-            setIsBackgroundModeOn(true);
-            alert(
-              "✅ Modo Segundo Plano Activado\n\nEl sistema mantendrá la conexión activa aunque bloquees el celular. \n\nNo cierres la app, solo bloquéala.",
-            );
-          })
-          .catch((e) => {
-            console.error("Error audio background:", e);
-            alert(
-              "No se pudo activar el audio de fondo. Toca la pantalla e intenta de nuevo.",
-            );
-          });
-      }
-    }
-  };
-
-  // --- FUNCIÓN: DISPARAR NOTIFICACIÓN REAL ---
-  const sendSystemNotification = (cita) => {
-    // Sonido Real (Notificación)
-    const audio = new Audio(
-      "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-    );
-    audio.play().catch((e) => console.log("Audio background restricted"));
-
-    // Notificación Visual (Pantalla Bloqueada)
-    if (Notification.permission === "granted") {
-      const notif = new Notification("✂️ Nueva Cita Agendada", {
-        body: `${cita.hora_inicio.substring(0, 5)} - ${cita.clients?.nombre || "Nuevo Cliente"}\nServicio: ${cita.service_name_snapshot}`,
-        icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
-        tag: "cita-nueva",
-        vibrate: [200, 100, 200],
-      });
-
-      notif.onclick = () => {
-        window.focus();
-        notif.close();
-      };
-    }
-  };
-
-  // --- 1. MANEJO DE SESIÓN ---
+  // --- 2. GESTIÓN DE SESIÓN ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -127,13 +80,12 @@ const AdminPanel = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- 2. REALTIME (CONECTADO A NOTIFICACIONES) ---
+  // --- 3. REALTIME Y NOTIFICACIONES LOCALES ---
   useEffect(() => {
     if (!barberProfile?.id) return;
-    console.log("📡 Conectando Realtime...");
 
     const channel = supabase
-      .channel("cambios-citas")
+      .channel("cambios-citas-os")
       .on(
         "postgres_changes",
         {
@@ -143,29 +95,41 @@ const AdminPanel = () => {
           filter: `barber_id=eq.${barberProfile.id}`,
         },
         async (payload) => {
-          console.log("🔔 Cita Recibida", payload.new);
+          console.log("🔔 Nueva cita recibida:", payload.new);
 
-          // Buscamos datos extra del cliente
-          const { data: fullData } = await supabase
+          const { data } = await supabase
             .from("appointments")
             .select("*, clients(nombre)")
             .eq("id", payload.new.id)
             .single();
 
-          if (fullData) {
-            sendSystemNotification(fullData);
+          if (data) {
+            // Sonido de alerta
+            new Audio(
+              "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+            )
+              .play()
+              .catch(() => {});
+
+            // Notificación nativa si el permiso está concedido
+            if (Notification.permission === "granted") {
+              new Notification("✂️ Nueva Cita Agendada", {
+                body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
+                icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
+                tag: "cita-nueva",
+              });
+            }
+
             fetchTodaysData(barberProfile.id);
           }
         },
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [barberProfile?.id]);
 
-  // --- 3. FUNCIONES DE DATOS ---
+  // --- 4. CARGA DE DATOS ---
   const fetchBarberProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -180,37 +144,31 @@ const AdminPanel = () => {
         fetchTodaysData(data.id);
       }
     } catch (err) {
-      console.error("Error perfil:", err);
+      console.error(err);
     } finally {
       setAuthChecking(false);
     }
   };
 
   const fetchTodaysData = async (barberId) => {
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const { data, error } = await supabase
-        .from("appointments")
-        .select("*, clients(nombre, telefono)")
-        .eq("barber_id", barberId)
-        .eq("fecha", today)
-        .neq("status", "cancelled")
-        .order("hora_inicio", { ascending: true });
+    const today = new Date().toISOString().split("T")[0];
+    const { data } = await supabase
+      .from("appointments")
+      .select("*, clients(nombre, telefono)")
+      .eq("barber_id", barberId)
+      .eq("fecha", today)
+      .neq("status", "cancelled")
+      .order("hora_inicio", { ascending: true });
 
-      if (error) throw error;
-
-      const safeData = data || [];
-      setAppointments(safeData);
-
-      const totalCortes = safeData.length;
-      const totalGanancia = safeData.reduce(
+    const safeData = data || [];
+    setAppointments(safeData);
+    setStats({
+      cortesHoy: safeData.length,
+      gananciaHoy: safeData.reduce(
         (acc, curr) => acc + (Number(curr.price_snapshot) || 0),
         0,
-      );
-      setStats({ cortesHoy: totalCortes, gananciaHoy: totalGanancia });
-    } catch (err) {
-      console.error("Error data:", err);
-    }
+      ),
+    });
   };
 
   // --- HANDLERS ---
@@ -222,7 +180,7 @@ const AdminPanel = () => {
       password,
     });
     if (error) {
-      alert("Error: " + error.message);
+      alert(error.message);
       setLoading(false);
     }
   };
@@ -232,15 +190,14 @@ const AdminPanel = () => {
   };
 
   // --- RENDER ---
-  if (authChecking) {
+  if (authChecking)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-indigo-600 font-bold animate-pulse">
-        Cargando Sistema...
+        Cargando KROMA...
       </div>
     );
-  }
 
-  if (!session || !barberProfile) {
+  if (!session || !barberProfile)
     return (
       <LoginAdmin
         email={email}
@@ -251,20 +208,10 @@ const AdminPanel = () => {
         loading={loading}
       />
     );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24">
-      {/* --- ELEMENTO DE AUDIO OCULTO PARA MANTENER LA APP VIVA --- */}
-      {/* Loop infinito de silencio */}
-      <audio
-        ref={silentAudioRef}
-        loop
-        src="https://raw.githubusercontent.com/anars/blank-audio/master/5-minutes-of-silence.mp3"
-        style={{ display: "none" }}
-      />
-
-      {/* HEADER */}
+      {/* Header */}
       <header className="px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-100 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold border border-indigo-100 uppercase text-lg">
@@ -280,60 +227,26 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          {/* BOTÓN MODO SEGUNDO PLANO (KEEP ALIVE) */}
-          <button
-            onClick={toggleBackgroundMode}
-            className={`p-2 rounded-full transition-all shadow-sm ${
-              isBackgroundModeOn
-                ? "bg-green-500 text-white animate-pulse ring-2 ring-green-200"
-                : "bg-slate-100 text-slate-400"
-            }`}
-            title="Activar Modo Segundo Plano"
-          >
-            <Radio size={20} />
-          </button>
-
-          {/* BOTÓN ACTIVAR NOTIFICACIONES */}
-          {permission !== "granted" ? (
+        {/* Estado Notificaciones */}
+        <div className="flex items-center gap-2">
+          {!oneSignalId ? (
             <button
-              onClick={requestNotificationPermission}
-              className="p-2 text-white bg-indigo-600 rounded-full hover:bg-indigo-700 transition-colors animate-bounce shadow-lg shadow-indigo-200"
-              title="Activar Notificaciones"
+              onClick={requestOSPermission}
+              className="p-2 bg-indigo-600 text-white rounded-full animate-bounce shadow-lg"
             >
               <BellRing size={20} />
             </button>
           ) : (
-            <div className="p-2 text-indigo-500 bg-indigo-50 rounded-full">
-              <Bell size={20} />
+            <div className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold border border-green-100 flex items-center gap-1">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              NOTIFICACIONES ON
             </div>
           )}
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Contenido según Tab */}
       <main className="p-6 max-w-md mx-auto">
-        {/* Aviso informativo si el modo segundo plano está apagado */}
-        {!isBackgroundModeOn && (
-          <div
-            className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-center"
-            onClick={toggleBackgroundMode}
-          >
-            <div className="bg-amber-100 p-2 rounded-full text-amber-600">
-              <Radio size={16} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-amber-800">
-                Activa el Segundo Plano
-              </p>
-              <p className="text-[10px] text-amber-600 leading-tight">
-                Para recibir notificaciones con la pantalla bloqueada, toca el
-                icono de radio arriba.
-              </p>
-            </div>
-          </div>
-        )}
-
         {activeTab === "agenda" ? (
           <AgendAdmin
             stats={stats}
@@ -351,7 +264,7 @@ const AdminPanel = () => {
         )}
       </main>
 
-      {/* Navbar */}
+      {/* Navegación Inferior */}
       <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-100 p-4 pb-6 flex justify-around items-center z-50">
         <button
           onClick={() => setActiveTab("agenda")}
