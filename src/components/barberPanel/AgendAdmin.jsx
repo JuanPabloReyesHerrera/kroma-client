@@ -1,7 +1,5 @@
 import React from "react";
 import { Calendar, RefreshCw, Phone, MessageCircle } from "lucide-react";
-
-// FIX: Agregamos valores por defecto a 'stats' y 'appointments'
 const AgendAdmin = ({
   stats = { cortesHoy: 0, gananciaHoy: 0 },
   appointments = [],

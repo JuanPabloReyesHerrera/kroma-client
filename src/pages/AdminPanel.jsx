@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../supabase/conection"; // Importación local correcta
-import { User, Calendar, BarChart3, LogOut, RefreshCw } from "lucide-react";
+import { supabase } from "../supabase/conection";
+import {
+  User,
+  Calendar,
+  BarChart3,
+  LogOut,
+  Bell,
+  BellRing,
+} from "lucide-react";
+
+// Componentes locales (Asegúrate de que las rutas coincidan con la estructura regenerada)
 import LoginAdmin from "../components/barberPanel/LoginAdmin";
 import AgendAdmin from "../components/barberPanel/AgendAdmin";
 import MetasAdmin from "../components/barberPanel/MetasAdmin";
@@ -13,7 +22,7 @@ const AdminPanel = () => {
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
 
-  // Datos de Negocio
+  // Datos
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState({ cortesHoy: 0, gananciaHoy: 0 });
 
@@ -22,16 +31,60 @@ const AdminPanel = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // 1. MANEJO DE SESIÓN
+  // Notificaciones
+  const [permission, setPermission] = useState(Notification.permission);
+
+  // --- FUNCIÓN: SOLICITAR PERMISOS ---
+  const requestNotificationPermission = async () => {
+    if (!("Notification" in window)) {
+      alert("Tu navegador no soporta notificaciones.");
+      return;
+    }
+
+    const result = await Notification.requestPermission();
+    setPermission(result);
+
+    if (result === "granted") {
+      new Notification("¡Notificaciones activadas!", {
+        body: "Te avisaremos aquí cuando llegue un cliente, incluso con la pantalla bloqueada.",
+        icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
+      });
+    }
+  };
+
+  // --- FUNCIÓN: DISPARAR NOTIFICACIÓN REAL ---
+  const sendSystemNotification = (cita) => {
+    // Sonido
+    const audio = new Audio(
+      "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+    );
+    audio.play().catch((e) => console.log("Audio background restricted"));
+
+    // Notificación Visual (Pantalla Bloqueada)
+    // El flag 'true' es para forzar el envío en la demo, en prod usar document.hidden
+    if (Notification.permission === "granted") {
+      const notif = new Notification("✂️ Nueva Cita Agendada", {
+        body: `${cita.hora_inicio.substring(0, 5)} - ${cita.clients?.nombre || "Nuevo Cliente"}\nServicio: ${cita.service_name_snapshot}`,
+        icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
+        tag: "cita-nueva", // Evita duplicados
+        vibrate: [200, 100, 200],
+      });
+
+      notif.onclick = () => {
+        window.focus();
+        notif.close();
+      };
+    }
+  };
+
+  // --- 1. MANEJO DE SESIÓN ---
   useEffect(() => {
-    // Verificar sesión actual al cargar
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchBarberProfile(session.user.id);
       else setAuthChecking(false);
     });
 
-    // Escuchar cambios (login/logout)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -43,11 +96,48 @@ const AdminPanel = () => {
         setAuthChecking(false);
       }
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. OBTENER PERFIL DEL BARBERO
+  // --- 2. REALTIME (CONECTADO A NOTIFICACIONES) ---
+  useEffect(() => {
+    if (!barberProfile?.id) return;
+    console.log("📡 Conectando Realtime...");
+
+    const channel = supabase
+      .channel("cambios-citas")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "appointments",
+          filter: `barber_id=eq.${barberProfile.id}`,
+        },
+        async (payload) => {
+          console.log("🔔 Cita Recibida", payload.new);
+
+          // Buscamos datos extra del cliente para mostrar el nombre en la notificación
+          const { data: fullData } = await supabase
+            .from("appointments")
+            .select("*, clients(nombre)")
+            .eq("id", payload.new.id)
+            .single();
+
+          if (fullData) {
+            sendSystemNotification(fullData);
+            fetchTodaysData(barberProfile.id);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [barberProfile?.id]);
+
+  // --- 3. FUNCIONES DE DATOS ---
   const fetchBarberProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -57,11 +147,9 @@ const AdminPanel = () => {
         .single();
 
       if (error) throw error;
-
       if (data) {
         setBarberProfile(data);
         fetchTodaysData(data.id);
-        setupRealtime(data.id);
       }
     } catch (err) {
       console.error("Error perfil:", err);
@@ -70,11 +158,9 @@ const AdminPanel = () => {
     }
   };
 
-  // 3. OBTENER DATOS DEL DÍA
   const fetchTodaysData = async (barberId) => {
     try {
       const today = new Date().toISOString().split("T")[0];
-
       const { data, error } = await supabase
         .from("appointments")
         .select("*, clients(nombre, telefono)")
@@ -88,42 +174,15 @@ const AdminPanel = () => {
       const safeData = data || [];
       setAppointments(safeData);
 
-      // Calcular totales
       const totalCortes = safeData.length;
       const totalGanancia = safeData.reduce(
         (acc, curr) => acc + (Number(curr.price_snapshot) || 0),
         0,
       );
-
       setStats({ cortesHoy: totalCortes, gananciaHoy: totalGanancia });
     } catch (err) {
-      console.error("Error fetching data:", err);
+      console.error("Error data:", err);
     }
-  };
-
-  // 4. REALTIME
-  const setupRealtime = (barberId) => {
-    const channel = supabase
-      .channel("cambios-citas")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "appointments",
-          filter: `barber_id=eq.${barberId}`,
-        },
-        () => {
-          new Audio(
-            "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-          )
-            .play()
-            .catch((e) => {});
-          fetchTodaysData(barberId);
-        },
-      )
-      .subscribe();
-    return () => supabase.removeChannel(channel);
   };
 
   // --- HANDLERS ---
@@ -168,7 +227,7 @@ const AdminPanel = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24">
-      {/* Header */}
+      {/* HEADER */}
       <header className="px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-100 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold border border-indigo-100 uppercase text-lg">
@@ -183,12 +242,21 @@ const AdminPanel = () => {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-          <span className="text-[10px] font-bold text-green-600 uppercase">
-            En Línea
-          </span>
-        </div>
+
+        {/* BOTÓN ACTIVAR NOTIFICACIONES */}
+        {permission !== "granted" ? (
+          <button
+            onClick={requestNotificationPermission}
+            className="p-2 text-white bg-indigo-600 rounded-full hover:bg-indigo-700 transition-colors animate-bounce shadow-lg shadow-indigo-200"
+            title="Activar Notificaciones"
+          >
+            <BellRing size={20} />
+          </button>
+        ) : (
+          <div className="p-2 text-green-500 bg-green-50 rounded-full">
+            <Bell size={20} />
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
