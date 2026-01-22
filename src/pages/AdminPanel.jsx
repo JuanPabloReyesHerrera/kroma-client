@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase/conection";
 import {
   User,
@@ -7,9 +7,10 @@ import {
   LogOut,
   Bell,
   BellRing,
+  Radio,
 } from "lucide-react";
 
-// Componentes locales (Asegúrate de que las rutas coincidan con la estructura regenerada)
+// Componentes locales
 import LoginAdmin from "../components/barberPanel/LoginAdmin";
 import AgendAdmin from "../components/barberPanel/AgendAdmin";
 import MetasAdmin from "../components/barberPanel/MetasAdmin";
@@ -31,8 +32,10 @@ const AdminPanel = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Notificaciones
+  // Notificaciones & Background
   const [permission, setPermission] = useState(Notification.permission);
+  const [isBackgroundModeOn, setIsBackgroundModeOn] = useState(false);
+  const silentAudioRef = useRef(null);
 
   // --- FUNCIÓN: SOLICITAR PERMISOS ---
   const requestNotificationPermission = async () => {
@@ -46,27 +49,52 @@ const AdminPanel = () => {
 
     if (result === "granted") {
       new Notification("¡Notificaciones activadas!", {
-        body: "Te avisaremos aquí cuando llegue un cliente, incluso con la pantalla bloqueada.",
+        body: "Ahora activa el 'Modo Segundo Plano' para recibir alertas con el celular bloqueado.",
         icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
       });
     }
   };
 
+  // --- FUNCIÓN: ACTIVAR SEGUNDO PLANO (KEEP ALIVE) ---
+  const toggleBackgroundMode = () => {
+    if (silentAudioRef.current) {
+      if (isBackgroundModeOn) {
+        silentAudioRef.current.pause();
+        setIsBackgroundModeOn(false);
+      } else {
+        // Reproducimos silencio para mantener el hilo de JS activo
+        silentAudioRef.current
+          .play()
+          .then(() => {
+            setIsBackgroundModeOn(true);
+            alert(
+              "✅ Modo Segundo Plano Activado\n\nEl sistema mantendrá la conexión activa aunque bloquees el celular. \n\nNo cierres la app, solo bloquéala.",
+            );
+          })
+          .catch((e) => {
+            console.error("Error audio background:", e);
+            alert(
+              "No se pudo activar el audio de fondo. Toca la pantalla e intenta de nuevo.",
+            );
+          });
+      }
+    }
+  };
+
   // --- FUNCIÓN: DISPARAR NOTIFICACIÓN REAL ---
   const sendSystemNotification = (cita) => {
-    // Sonido
+    // Sonido Real (Notificación)
     const audio = new Audio(
       "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
     );
     audio.play().catch((e) => console.log("Audio background restricted"));
 
     // Notificación Visual (Pantalla Bloqueada)
-    // El flag 'true' es para forzar el envío en la demo, en prod usar document.hidden
     if (Notification.permission === "granted") {
       const notif = new Notification("✂️ Nueva Cita Agendada", {
         body: `${cita.hora_inicio.substring(0, 5)} - ${cita.clients?.nombre || "Nuevo Cliente"}\nServicio: ${cita.service_name_snapshot}`,
         icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
-        tag: "cita-nueva", // Evita duplicados
+        tag: "cita-nueva",
         vibrate: [200, 100, 200],
       });
 
@@ -117,7 +145,7 @@ const AdminPanel = () => {
         async (payload) => {
           console.log("🔔 Cita Recibida", payload.new);
 
-          // Buscamos datos extra del cliente para mostrar el nombre en la notificación
+          // Buscamos datos extra del cliente
           const { data: fullData } = await supabase
             .from("appointments")
             .select("*, clients(nombre)")
@@ -227,6 +255,15 @@ const AdminPanel = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24">
+      {/* --- ELEMENTO DE AUDIO OCULTO PARA MANTENER LA APP VIVA --- */}
+      {/* Loop infinito de silencio */}
+      <audio
+        ref={silentAudioRef}
+        loop
+        src="https://raw.githubusercontent.com/anars/blank-audio/master/5-minutes-of-silence.mp3"
+        style={{ display: "none" }}
+      />
+
       {/* HEADER */}
       <header className="px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-100 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
@@ -243,24 +280,60 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        {/* BOTÓN ACTIVAR NOTIFICACIONES */}
-        {permission !== "granted" ? (
+        <div className="flex gap-2">
+          {/* BOTÓN MODO SEGUNDO PLANO (KEEP ALIVE) */}
           <button
-            onClick={requestNotificationPermission}
-            className="p-2 text-white bg-indigo-600 rounded-full hover:bg-indigo-700 transition-colors animate-bounce shadow-lg shadow-indigo-200"
-            title="Activar Notificaciones"
+            onClick={toggleBackgroundMode}
+            className={`p-2 rounded-full transition-all shadow-sm ${
+              isBackgroundModeOn
+                ? "bg-green-500 text-white animate-pulse ring-2 ring-green-200"
+                : "bg-slate-100 text-slate-400"
+            }`}
+            title="Activar Modo Segundo Plano"
           >
-            <BellRing size={20} />
+            <Radio size={20} />
           </button>
-        ) : (
-          <div className="p-2 text-green-500 bg-green-50 rounded-full">
-            <Bell size={20} />
-          </div>
-        )}
+
+          {/* BOTÓN ACTIVAR NOTIFICACIONES */}
+          {permission !== "granted" ? (
+            <button
+              onClick={requestNotificationPermission}
+              className="p-2 text-white bg-indigo-600 rounded-full hover:bg-indigo-700 transition-colors animate-bounce shadow-lg shadow-indigo-200"
+              title="Activar Notificaciones"
+            >
+              <BellRing size={20} />
+            </button>
+          ) : (
+            <div className="p-2 text-indigo-500 bg-indigo-50 rounded-full">
+              <Bell size={20} />
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Main Content */}
       <main className="p-6 max-w-md mx-auto">
+        {/* Aviso informativo si el modo segundo plano está apagado */}
+        {!isBackgroundModeOn && (
+          <div
+            className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-center"
+            onClick={toggleBackgroundMode}
+          >
+            <div className="bg-amber-100 p-2 rounded-full text-amber-600">
+              <Radio size={16} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-800">
+                Activa el Segundo Plano
+              </p>
+              <p className="text-[10px] text-amber-600 leading-tight">
+                Para recibir notificaciones con la pantalla bloqueada, toca el
+                icono de radio arriba.
+              </p>
+            </div>
+          </div>
+        )}
+
         {activeTab === "agenda" ? (
           <AgendAdmin
             stats={stats}
