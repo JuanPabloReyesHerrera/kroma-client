@@ -27,11 +27,10 @@ const AdminPanel = () => {
   // OneSignal: Estado de Permisos
   const [osStatus, setOsStatus] = useState("Cargando...");
 
-  // --- 1. CONFIGURACIÓN ONESIGNAL (CLIENTE ROBUSTO) ---
+  // --- 1. CONFIGURACIÓN ONESIGNAL ---
   useEffect(() => {
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
-        // Depuración: Ver si OneSignal cargó
         console.log("OneSignal inicializado");
 
         // Chequear permiso actual
@@ -53,28 +52,33 @@ const AdminPanel = () => {
     }
   }, []);
 
-  // FUNCIÓN PARA FORZAR PERMISO (DEBUGGING)
+  // FUNCIÓN CORREGIDA PARA IOS (SIN ALERTAS INTERMEDIAS QUE BLOQUEAN)
   const forcePermission = async () => {
     try {
       if (window.OneSignalDeferred) {
         window.OneSignalDeferred.push(async function (OneSignal) {
-          // Alerta para confirmar que el click funcionó
-          alert("Solicitando permiso a iOS...");
+          // Validación previa
+          if (OneSignal.Notifications.permission === "denied") {
+            alert(
+              "⚠️ Las notificaciones están BLOQUEADAS.\n\nVe a Ajustes > Notificaciones y actívalas.",
+            );
+            return;
+          }
 
-          // Pedir permiso
+          // SOLICITUD DIRECTA (User Gesture puro)
           const accepted = await OneSignal.Notifications.requestPermission();
 
           if (accepted) {
-            alert("✅ Permiso CONCEDIDO. Ahora revisa Ajustes.");
+            alert(
+              "✅ Permiso concedido. Revisa en Ajustes si ya aparece la App.",
+            );
           } else {
-            alert("❌ Permiso DENEGADO o ignorado.");
+            console.log("Permiso no concedido o cerrado.");
           }
         });
-      } else {
-        alert("OneSignal no está cargado en esta página.");
       }
     } catch (e) {
-      alert("Error: " + e.message);
+      console.error("Error pidiendo permiso:", e);
     }
   };
 
@@ -100,7 +104,7 @@ const AdminPanel = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- 3. REALTIME (FEEDBACK LOCAL) ---
+  // --- 3. REALTIME ---
   useEffect(() => {
     if (!barberProfile?.id) return;
 
