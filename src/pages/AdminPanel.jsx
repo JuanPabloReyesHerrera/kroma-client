@@ -8,10 +8,6 @@ import AgendAdmin from "../components/barberPanel/AgendAdmin";
 import MetasAdmin from "../components/barberPanel/MetasAdmin";
 import PerfilAdmin from "../components/barberPanel/PerfilAdmin";
 
-/**
- * AdminPanel Component
- * Integra Supabase Realtime y OneSignal para notificaciones profesionales.
- */
 const AdminPanel = () => {
   // --- ESTADOS ---
   const [session, setSession] = useState(null);
@@ -19,30 +15,40 @@ const AdminPanel = () => {
   const [authChecking, setAuthChecking] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // Datos de Negocio
+  // Datos
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState({ cortesHoy: 0, gananciaHoy: 0 });
   const [activeTab, setActiveTab] = useState("agenda");
 
-  // Formulario de Login
+  // Login
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ID de OneSignal
+  // OneSignal: Estado de Permisos y Suscripción
+  const [osPermission, setOsPermission] = useState(false);
   const [oneSignalId, setOneSignalId] = useState(null);
 
-  // --- 1. CONFIGURACIÓN ONESIGNAL ---
+  // --- 1. CONFIGURACIÓN ONESIGNAL (CLIENTE ROBUSTO) ---
   useEffect(() => {
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
-        // Obtener ID de suscripción
-        const userId = await OneSignal.User.PushSubscription.id;
-        if (userId) {
-          console.log("✅ OneSignal User ID:", userId);
-          setOneSignalId(userId);
-        }
+        // A. Chequear permiso actual (Nativo)
+        const hasPermission = OneSignal.Notifications.permission;
+        setOsPermission(hasPermission);
 
-        // Listener para cambios en la suscripción
+        // B. Obtener ID si existe
+        const userId = await OneSignal.User.PushSubscription.id;
+        setOneSignalId(userId);
+
+        // C. Escuchar cambios en el permiso
+        OneSignal.Notifications.addEventListener(
+          "permissionChange",
+          (permission) => {
+            setOsPermission(permission);
+          },
+        );
+
+        // D. Escuchar cambios de suscripción
         OneSignal.User.PushSubscription.addEventListener("change", (event) => {
           if (event.current.id) setOneSignalId(event.current.id);
         });
@@ -58,7 +64,7 @@ const AdminPanel = () => {
     }
   };
 
-  // --- 2. GESTIÓN DE SESIÓN ---
+  // --- 2. SESIÓN ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -80,7 +86,7 @@ const AdminPanel = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- 3. REALTIME Y NOTIFICACIONES LOCALES ---
+  // --- 3. REALTIME (FEEDBACK LOCAL) ---
   useEffect(() => {
     if (!barberProfile?.id) return;
 
@@ -95,7 +101,7 @@ const AdminPanel = () => {
           filter: `barber_id=eq.${barberProfile.id}`,
         },
         async (payload) => {
-          console.log("🔔 Nueva cita recibida:", payload.new);
+          console.log("🔔 Nueva cita (Realtime):", payload.new);
 
           const { data } = await supabase
             .from("appointments")
@@ -104,18 +110,16 @@ const AdminPanel = () => {
             .single();
 
           if (data) {
-            // Sonido de alerta
             new Audio(
               "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             )
               .play()
               .catch(() => {});
 
-            // Notificación nativa si el permiso está concedido
             if (Notification.permission === "granted") {
               new Notification("✂️ Nueva Cita Agendada", {
                 body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
-                icon: "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
+                icon: "/logo192.png",
                 tag: "cita-nueva",
               });
             }
@@ -129,7 +133,7 @@ const AdminPanel = () => {
     return () => supabase.removeChannel(channel);
   }, [barberProfile?.id]);
 
-  // --- 4. CARGA DE DATOS ---
+  // --- DATOS ---
   const fetchBarberProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -137,7 +141,6 @@ const AdminPanel = () => {
         .select("*, sedes(nombre)")
         .eq("linked_user_id", userId)
         .single();
-
       if (error) throw error;
       if (data) {
         setBarberProfile(data);
@@ -159,7 +162,6 @@ const AdminPanel = () => {
       .eq("fecha", today)
       .neq("status", "cancelled")
       .order("hora_inicio", { ascending: true });
-
     const safeData = data || [];
     setAppointments(safeData);
     setStats({
@@ -171,7 +173,7 @@ const AdminPanel = () => {
     });
   };
 
-  // --- HANDLERS ---
+  // --- LOGIN ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -211,7 +213,6 @@ const AdminPanel = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24">
-      {/* Header */}
       <header className="px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-100 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold border border-indigo-100 uppercase text-lg">
@@ -227,12 +228,11 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        {/* Estado Notificaciones */}
         <div className="flex items-center gap-2">
-          {!oneSignalId ? (
+          {!osPermission ? (
             <button
               onClick={requestOSPermission}
-              className="p-2 bg-indigo-600 text-white rounded-full animate-bounce shadow-lg"
+              className="p-2 bg-indigo-600 text-white rounded-full animate-bounce shadow-lg flex items-center gap-1"
             >
               <BellRing size={20} />
             </button>
@@ -245,7 +245,6 @@ const AdminPanel = () => {
         </div>
       </header>
 
-      {/* Contenido según Tab */}
       <main className="p-6 max-w-md mx-auto">
         {activeTab === "agenda" ? (
           <AgendAdmin
@@ -264,7 +263,6 @@ const AdminPanel = () => {
         )}
       </main>
 
-      {/* Navegación Inferior */}
       <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-100 p-4 pb-6 flex justify-around items-center z-50">
         <button
           onClick={() => setActiveTab("agenda")}
