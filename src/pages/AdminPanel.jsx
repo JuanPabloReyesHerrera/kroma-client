@@ -31,92 +31,75 @@ const AdminPanel = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ESTADOS DE DEBUGGING PARA IOS
-  const [debugLog, setDebugLog] = useState("Listo para probar");
-  const [osPermission, setOsPermission] = useState(false);
+  // ESTADOS DE DEBUGGING PARA ONESIGNAL
+  const [osStatus, setOsStatus] = useState("Cargando...");
+  const [subscriptionId, setSubscriptionId] = useState(null);
 
-  const log = (msg) => {
-    console.log(msg);
-    setDebugLog(msg);
-  };
-
-  // --- 1. CONFIGURACIÓN ONESIGNAL (Mantenemos la escucha básica) ---
+  // --- 1. SINCRONIZACIÓN CON ONESIGNAL ---
   useEffect(() => {
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
-        // Chequear permiso al cargar
-        const permission = OneSignal.Notifications.permission;
-        setOsPermission(permission === "granted");
-        log(`Estado Inicial: ${permission}`);
+        // A. Verificar ID de suscripción real
+        const id = await OneSignal.User.PushSubscription.id;
+        setSubscriptionId(id);
 
+        if (id) {
+          setOsStatus("✅ Suscrito");
+        } else {
+          setOsStatus("⚠️ Sin Suscripción");
+        }
+
+        // B. Escuchar cambios de permiso y suscripción
         OneSignal.Notifications.addEventListener(
           "permissionChange",
           (permission) => {
-            log(`Cambio Permiso: ${permission}`);
-            setOsPermission(permission === "granted");
+            if (permission === "granted") setOsStatus("✅ Permitido");
+            else setOsStatus("❌ Bloqueado");
           },
         );
+
+        OneSignal.User.PushSubscription.addEventListener("change", (event) => {
+          setSubscriptionId(event.current.id);
+        });
       });
+    } else {
+      setOsStatus("❌ SDK no cargado");
     }
   }, []);
 
-  // --- PRUEBA NATIVA (CORREGIDA PARA QUE SUENE SIEMPRE) ---
-  const testNativeNotification = async () => {
-    log("⚡ Iniciando prueba...");
-
-    // 1. Verificar soporte
-    if (!("Notification" in window)) {
-      alert("Tu navegador no soporta notificaciones.");
+  // PRUEBA FORZADA (Vía Service Worker para iOS/Safari)
+  const sendTestNotification = async () => {
+    if (Notification.permission !== "granted") {
+      if (window.OneSignalDeferred) {
+        window.OneSignalDeferred.push(async function (OneSignal) {
+          await OneSignal.Notifications.requestPermission();
+        });
+      }
       return;
     }
 
-    // 2. Verificar estado actual
-    if (Notification.permission === "granted") {
-      log("⚡ Enviando...");
-      try {
-        // Generamos un ID único usando la hora exacta para evitar que iOS las agrupe en silencio
-        const timestamp = new Date().toLocaleTimeString();
-        const uniqueTag = "test-" + Date.now();
-
-        // Usamos el Service Worker si está listo (Mejor para PWA iOS)
-        if ("serviceWorker" in navigator) {
-          const registration = await navigator.serviceWorker.ready;
-          await registration.showNotification(`Prueba ${timestamp}`, {
-            body: "Si ves esto, las notificaciones funcionan ✅",
-            icon: "/logo192.png",
-            tag: uniqueTag, // IMPORTANTE: Tag único forzará una nueva alerta
-            renotify: true, // IMPORTANTE: Obliga a sonar de nuevo
-            vibrate: [200, 100, 200],
-          });
-        } else {
-          // Fallback estándar
-          new Notification(`Prueba ${timestamp}`, {
-            body: "Prueba sin Service Worker",
-            icon: "/logo192.png",
-            tag: uniqueTag,
-          });
-        }
-        log("✅ Enviada: " + timestamp);
-      } catch (e) {
-        console.error(e);
-        log("❌ Error: " + e.message);
-        alert("Error al enviar: " + e.message);
-      }
-    } else if (Notification.permission !== "denied") {
-      log("⚡ Pidiendo permiso...");
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        setOsPermission(true);
-        testNativeNotification(); // Reintentar inmediatamente
+    try {
+      const timestamp = new Date().toLocaleTimeString();
+      // En PWA iOS, usamos el registro del Service Worker directamente para asegurar la alerta visual
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification("Kroma Pro", {
+          body: `Prueba visual exitosa: ${timestamp}`,
+          icon: "/logo192.png",
+          badge: "/logo192.png",
+          tag: "test-" + Date.now(),
+          renotify: true,
+          data: { url: window.location.origin },
+        });
       } else {
-        alert("Permiso denegado por el usuario.");
+        new Notification("Kroma Pro", { body: `Prueba simple: ${timestamp}` });
       }
-    } else {
-      alert("⚠️ El sistema dice DENIED. Revisa Ajustes > Kroma Pro.");
+    } catch (error) {
+      console.error("Error en notificación:", error);
     }
   };
 
-  // --- 2. SESIÓN ---
+  // --- 2. SESIÓN Y PERFIL ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -138,12 +121,11 @@ const AdminPanel = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- 3. REALTIME (CORREGIDO PARA SONAR SIEMPRE) ---
+  // --- 3. REALTIME (ALERTAS LOCALES) ---
   useEffect(() => {
     if (!barberProfile?.id) return;
-
     const channel = supabase
-      .channel("cambios-citas-os")
+      .channel("cambios-citas-admin")
       .on(
         "postgres_changes",
         {
@@ -153,57 +135,41 @@ const AdminPanel = () => {
           filter: `barber_id=eq.${barberProfile.id}`,
         },
         async (payload) => {
-          console.log("🔔 Nueva cita (Realtime):", payload.new);
-
           const { data } = await supabase
             .from("appointments")
             .select("*, clients(nombre)")
             .eq("id", payload.new.id)
             .single();
-
           if (data) {
-            // Sonido en la web (si está abierta)
+            // Reproducir sonido para feedback inmediato
             new Audio(
               "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             )
               .play()
               .catch(() => {});
 
-            // Notificación Nativa Robusta
-            if (Notification.permission === "granted") {
-              const title = "✂️ Nueva Cita Agendada";
-              const options = {
+            // Notificación visual persistente
+            if (
+              Notification.permission === "granted" &&
+              "serviceWorker" in navigator
+            ) {
+              const reg = await navigator.serviceWorker.ready;
+              reg.showNotification("✂️ Nueva Cita", {
                 body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
                 icon: "/logo192.png",
-                tag: "cita-" + payload.new.id, // Tag único basado en el ID de la cita
-                renotify: true, // Obligar a sonar
-                data: { url: window.location.href }, // Meta data útil
-              };
-
-              // Intentar vía Service Worker (Mejor soporte iOS PWA)
-              if ("serviceWorker" in navigator) {
-                navigator.serviceWorker.ready
-                  .then((registration) => {
-                    registration.showNotification(title, options);
-                  })
-                  .catch(() => {
-                    new Notification(title, options);
-                  });
-              } else {
-                new Notification(title, options);
-              }
+                tag: "cita-" + data.id,
+                renotify: true,
+              });
             }
-
             fetchTodaysData(barberProfile.id);
           }
         },
       )
       .subscribe();
-
     return () => supabase.removeChannel(channel);
   }, [barberProfile?.id]);
 
-  // --- DATOS ---
+  // --- MÉTODOS DE DATOS ---
   const fetchBarberProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -243,7 +209,6 @@ const AdminPanel = () => {
     });
   };
 
-  // --- LOGIN ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -256,7 +221,6 @@ const AdminPanel = () => {
       setLoading(false);
     }
   };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -264,11 +228,10 @@ const AdminPanel = () => {
   // --- RENDER ---
   if (authChecking)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-indigo-600 font-bold animate-pulse">
-        Cargando KROMA...
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-indigo-600 font-bold animate-pulse text-sm uppercase tracking-widest">
+        Iniciando Kroma Pro...
       </div>
     );
-
   if (!session || !barberProfile)
     return (
       <LoginAdmin
@@ -283,33 +246,34 @@ const AdminPanel = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24">
+      {/* HEADER */}
       <header className="px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-100 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold border border-indigo-100 uppercase text-lg">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-indigo-100 shadow-lg uppercase">
             {barberProfile.nombre?.substring(0, 2)}
           </div>
           <div>
-            <h2 className="font-bold text-slate-800 text-sm">
+            <h2 className="font-bold text-slate-800 text-sm leading-tight">
               {barberProfile.nombre}
             </h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              {barberProfile.sedes?.nombre || "Especialista"}
-            </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${subscriptionId ? "bg-green-500" : "bg-slate-300 animate-pulse"}`}
+              ></span>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                {osStatus}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* ZONA DE PRUEBAS */}
-        <div className="flex flex-col items-end">
+        <div className="flex items-center gap-2">
           <button
-            onClick={testNativeNotification}
-            className={`p-2 rounded-full shadow-lg flex items-center gap-1 transition-all active:scale-95 ${osPermission ? "bg-yellow-400 text-yellow-900" : "bg-slate-200 text-slate-500"}`}
+            onClick={sendTestNotification}
+            className={`p-2.5 rounded-full transition-all active:scale-90 ${subscriptionId ? "bg-indigo-600 text-white shadow-indigo-200" : "bg-slate-200 text-slate-400"} shadow-lg`}
           >
-            <Zap size={20} fill="currentColor" />
+            <Zap size={20} fill={subscriptionId ? "currentColor" : "none"} />
           </button>
-
-          <span className="text-[9px] mt-1 font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
-            {debugLog.substring(0, 20)}...
-          </span>
         </div>
       </header>
 
@@ -331,31 +295,32 @@ const AdminPanel = () => {
         )}
       </main>
 
-      <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-100 p-4 pb-6 flex justify-around items-center z-50">
+      {/* NAVBAR */}
+      <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-slate-100 p-4 pb-8 flex justify-around items-center z-50">
         <button
           onClick={() => setActiveTab("agenda")}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "agenda" ? "text-indigo-600 scale-105" : "text-slate-300"}`}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "agenda" ? "text-indigo-600 scale-110" : "text-slate-300"}`}
         >
           <Calendar size={24} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">
+          <span className="text-[9px] font-black uppercase tracking-tighter">
             Agenda
           </span>
         </button>
         <button
           onClick={() => setActiveTab("metas")}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "metas" ? "text-indigo-600 scale-105" : "text-slate-300"}`}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "metas" ? "text-indigo-600 scale-110" : "text-slate-300"}`}
         >
           <BarChart3 size={24} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">
+          <span className="text-[9px] font-black uppercase tracking-tighter">
             Metas
           </span>
         </button>
         <button
           onClick={() => setActiveTab("perfil")}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "perfil" ? "text-indigo-600 scale-105" : "text-slate-300"}`}
+          className={`flex flex-col items-center gap-1 transition-all ${activeTab === "perfil" ? "text-indigo-600 scale-110" : "text-slate-300"}`}
         >
           <User size={24} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">
+          <span className="text-[9px] font-black uppercase tracking-tighter">
             Perfil
           </span>
         </button>
