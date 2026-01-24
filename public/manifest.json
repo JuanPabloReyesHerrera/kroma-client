@@ -1,7 +1,9 @@
 {
   "name": "Kroma Tech Pro",
   "short_name": "Kroma Pro",
+  "description": "Panel de administración para especialistas",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",
@@ -10,12 +12,20 @@
     {
       "src": "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1039/1039328.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
