@@ -1,68 +1,69 @@
-// --- SUPABASE EDGE FUNCTION PARA ONESIGNAL ---
-// Esta función se ejecuta en los servidores de Supabase.
-// Recibe los datos de la nueva cita y le dice a OneSignal que envíe la notificación.
+// --- SUPABASE EDGE FUNCTION PARA ONESIGNAL (IOS & ANDROID) ---
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-// Obtenemos las claves secretas que configuraste en Supabase (secrets set)
-const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") || "";
-const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY") || "";
+const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || '';
+const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY') || '';
 
 serve(async (req) => {
   try {
-    // 1. Recibir los datos del Webhook de la base de datos (Supabase)
     const payload = await req.json();
-
-    // payload.record contiene la fila exacta que se acabó de crear en la tabla 'appointments'
     const appointment = payload.record;
-
-    // Validamos que existan las claves
+    
     if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-      throw new Error(
-        "Faltan las claves de OneSignal en las variables de entorno",
-      );
+      throw new Error("Faltan las claves de OneSignal");
     }
 
     console.log("🔔 Procesando notificación para cita ID:", appointment.id);
 
-    // 2. Construir el mensaje para OneSignal
-    // Documentación: https://documentation.onesignal.com/reference/create-notification
     const message = {
       app_id: ONESIGNAL_APP_ID,
-
-      // "Subscribed Users" envía a todos los dispositivos registrados en la app.
-      // Para hacerlo más específico (solo al barbero dueño de la cita),
-      // necesitaríamos lógica adicional, pero para la demo "Todos" funciona perfecto.
-      included_segments: ["Subscribed Users"],
-
-      contents: {
+      included_segments: ["Subscribed Users"], 
+      
+      // 1. CONTENIDO
+      contents: { 
         en: `New appointment at ${appointment.hora_inicio.slice(0, 5)}`,
-        es: `✂️ Nueva cita agendada a las ${appointment.hora_inicio.slice(0, 5)}`,
+        es: `✂️ Nueva cita a las ${appointment.hora_inicio.slice(0, 5)}`
       },
       headings: {
         en: "New Reservation",
-        es: "¡Nueva Reserva Recibida!",
+        es: "¡Nueva Reserva Recibida!"
       },
-
-      // Datos extra para que la app sepa qué abrir si tocan la notificación
+      
+      // 2. DATOS (Para que al tocar abra la cita específica)
       data: {
         appointment_id: appointment.id,
         barber_id: appointment.barber_id,
+        url: "/admin" // Forzar apertura en admin
       },
 
-      // Configuración de Android para prioridad alta (Head-up notification)
-      android_channel_id: "kroma_channel_citas",
+      // --- 3. CONFIGURACIÓN ANDROID ---
+      android_channel_id: "kroma_channel_citas", 
       priority: 10,
-      android_accent_color: "4F46E5", // Color Índigo de tu marca
+      android_accent_color: "4F46E5",
       small_icon: "ic_stat_onesignal_default",
+      android_group: "citas_nuevas", // Agrupa notificaciones para no llenar la barra
+
+      // --- 4. CONFIGURACIÓN IOS (AGREGADO) ---
+      // 'target_channel': Asegura que sea Push y no Email/SMS
+      target_channel: "push",
+      
+      // 'ios_sound': CRÍTICO. Si no lo pones, llega en silencio.
+      ios_sound: "default", 
+      
+      // 'ios_badgeType': Incrementa el numerito rojo en el icono de la app
+      ios_badgeType: "Increase",
+      ios_badgeCount: 1,
+
+      // 'collapse_id': Si actualizas la misma cita, reemplaza la notificación anterior
+      // en vez de apilar basura.
+      collapse_id: `cita_${appointment.id}` 
     };
 
-    // 3. Enviar la petición a OneSignal (API REST)
     const response = await fetch("https://onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+        "Authorization": `Basic ${ONESIGNAL_REST_API_KEY}`
       },
       body: JSON.stringify(message),
     });
@@ -74,6 +75,7 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json" },
       status: 200,
     });
+
   } catch (error) {
     console.error("❌ Error enviando notificación:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
@@ -81,4 +83,4 @@ serve(async (req) => {
       status: 400,
     });
   }
-});
+})
