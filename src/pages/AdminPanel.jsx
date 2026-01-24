@@ -43,21 +43,37 @@ const AdminPanel = () => {
 
   // --- 1. CONFIGURACIÓN ONESIGNAL ROBUSTA ---
   useEffect(() => {
+    // A. TIMEOUT DE SEGURIDAD: Si en 5seg no carga, avisar
+    const timer = setTimeout(() => {
+      if (debugLog === "Iniciando...") {
+        log("⚠️ Alerta: El SDK tardó en responder. Verificando red...");
+      }
+    }, 5000);
+
+    // B. FORZAR REGISTRO DEL SW MANUALMENTE (Para desatascar iOS)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/OneSignalSDKWorker.js")
+        .then((registration) => {
+          console.log("✅ SW Forzado con éxito:", registration.scope);
+        })
+        .catch((err) => {
+          console.error("❌ Fallo SW Forzado:", err);
+          log("❌ Error SW Manual: " + err.message);
+        });
+    }
+
+    // C. INICIALIZACIÓN ESTÁNDAR
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
-        log("OneSignal: Cargando...");
+        clearTimeout(timer); // Cancelamos la alerta de timeout
+        log("OneSignal: Conectado ✅");
 
-        // 1. Verificar si el Service Worker está vivo (CRÍTICO PARA IOS)
+        // 1. Verificar SW (Ahora debería estar activo por el registro manual)
         if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.ready
-            .then((registration) => {
-              log("✅ SW Activo: " + registration.scope);
-            })
-            .catch((err) => {
-              log("❌ Error SW: " + err.message);
-            });
-        } else {
-          log("❌ Navegador sin soporte SW");
+          navigator.serviceWorker.ready.then((registration) => {
+            log("✅ SW Listo y Activo");
+          });
         }
 
         // 2. Chequear permiso actual
@@ -80,8 +96,10 @@ const AdminPanel = () => {
         );
       });
     } else {
-      log("Error: SDK no cargado");
+      log("Error Crítico: window.OneSignalDeferred no existe");
     }
+
+    return () => clearTimeout(timer);
   }, []);
 
   // FUNCIÓN DEFINITIVA PARA IOS
@@ -100,7 +118,7 @@ const AdminPanel = () => {
         await OneSignal.User.PushSubscription.optIn();
 
         // B. Si el OptIn no disparó nada, forzamos el Prompt Nativo
-        // Esperamos 500ms para no saturar el hilo
+        // Esperamos 800ms para no saturar el hilo
         setTimeout(async () => {
           const currentPerm = OneSignal.Notifications.permission;
           if (currentPerm === "default") {
@@ -302,9 +320,9 @@ const AdminPanel = () => {
 
           {/* LOG EN PANTALLA PARA IPHONE (DEBUGGING) */}
           <span
-            className={`text-[9px] mt-1 font-mono px-2 py-0.5 rounded ${debugLog.includes("Error") ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}`}
+            className={`text-[9px] mt-1 font-mono px-2 py-0.5 rounded ${debugLog.includes("Error") || debugLog.includes("Alerta") ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}
           >
-            {debugLog.substring(0, 20)}...
+            {debugLog.substring(0, 25)}...
           </span>
         </div>
       </header>
