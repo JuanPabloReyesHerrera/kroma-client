@@ -24,43 +24,57 @@ const AdminPanel = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // OneSignal: Estado de Permisos y Suscripción
-  const [osPermission, setOsPermission] = useState(false);
-  const [oneSignalId, setOneSignalId] = useState(null);
+  // OneSignal: Estado de Permisos
+  const [osStatus, setOsStatus] = useState("Cargando...");
 
   // --- 1. CONFIGURACIÓN ONESIGNAL (CLIENTE ROBUSTO) ---
   useEffect(() => {
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
-        // A. Chequear permiso actual (Nativo)
-        const hasPermission = OneSignal.Notifications.permission;
-        setOsPermission(hasPermission);
+        // Depuración: Ver si OneSignal cargó
+        console.log("OneSignal inicializado");
 
-        // B. Obtener ID si existe
-        const userId = await OneSignal.User.PushSubscription.id;
-        setOneSignalId(userId);
+        // Chequear permiso actual
+        const permission = OneSignal.Notifications.permission;
+        setOsStatus(
+          permission ? `Estado: ${permission}` : "Estado: Desconocido",
+        );
 
-        // C. Escuchar cambios en el permiso
+        // Escuchar cambios
         OneSignal.Notifications.addEventListener(
           "permissionChange",
           (permission) => {
-            setOsPermission(permission);
+            setOsStatus(`Cambio a: ${permission}`);
           },
         );
-
-        // D. Escuchar cambios de suscripción
-        OneSignal.User.PushSubscription.addEventListener("change", (event) => {
-          if (event.current.id) setOneSignalId(event.current.id);
-        });
       });
+    } else {
+      setOsStatus("Error: OneSignal no detectado");
     }
   }, []);
 
-  const requestOSPermission = () => {
-    if (window.OneSignalDeferred) {
-      window.OneSignalDeferred.push(async function (OneSignal) {
-        await OneSignal.Notifications.requestPermission();
-      });
+  // FUNCIÓN PARA FORZAR PERMISO (DEBUGGING)
+  const forcePermission = async () => {
+    try {
+      if (window.OneSignalDeferred) {
+        window.OneSignalDeferred.push(async function (OneSignal) {
+          // Alerta para confirmar que el click funcionó
+          alert("Solicitando permiso a iOS...");
+
+          // Pedir permiso
+          const accepted = await OneSignal.Notifications.requestPermission();
+
+          if (accepted) {
+            alert("✅ Permiso CONCEDIDO. Ahora revisa Ajustes.");
+          } else {
+            alert("❌ Permiso DENEGADO o ignorado.");
+          }
+        });
+      } else {
+        alert("OneSignal no está cargado en esta página.");
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
     }
   };
 
@@ -228,20 +242,14 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {!osPermission ? (
-            <button
-              onClick={requestOSPermission}
-              className="p-2 bg-indigo-600 text-white rounded-full animate-bounce shadow-lg flex items-center gap-1"
-            >
-              <BellRing size={20} />
-            </button>
-          ) : (
-            <div className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold border border-green-100 flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              NOTIFICACIONES ON
-            </div>
-          )}
+        <div className="flex flex-col items-end">
+          <button
+            onClick={forcePermission}
+            className="p-2 bg-indigo-600 text-white rounded-full animate-bounce shadow-lg flex items-center gap-1"
+          >
+            <BellRing size={20} />
+          </button>
+          <span className="text-[9px] text-slate-400 mt-1">{osStatus}</span>
         </div>
       </header>
 
