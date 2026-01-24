@@ -1,17 +1,45 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>kroma</title>
-    <!-- (PWA - Progressive Web Apps) -->
-    <link rel="manifest" href="/manifest.json" />
+    <!-- 1. ICONOS PARA IOS (IPHONE)-->
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="https://cdn-icons-png.flaticon.com/512/1039/1039328.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="https://cdn-icons-png.flaticon.com/512/1039/1039328.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="https://cdn-icons-png.flaticon.com/512/1039/1039328.png"
+    />
 
-    <!-- Color de la barra de estado en móviles -->
+    <!-- 2. MANIFEST (Debe estar arriba de los scripts) -->
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+
+    <!-- Título por defecto (Si falla el manifest, usará esto) -->
+    <title>Kroma Tech Pro</title>
+
     <meta name="theme-color" content="#4f46e5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
 
-    <!-- CÓDIGO DE ONESIGNAL (Inyectado aquí en el HEAD) -->
+    <!-- CÓDIGO DE ONESIGNAL -->
     <script
       src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
       defer
@@ -20,11 +48,13 @@
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function (OneSignal) {
         await OneSignal.init({
-          appId: "128db51b-71f3-43aa-9013-216d850adf12", // Tu App ID
-          allowLocalhostAsSecureOrigin: true, // ¡IMPORTANTE para probar en tu PC!
+          appId: "128db51b-71f3-43aa-9013-216d850adf12",
+          safari_web_id: "",
           notifyButton: {
-            enable: false, // Muestra la campanita de suscripción automáticamente
+            enable: true,
           },
+          // Importante para que no bloquee recursos locales
+          allowLocalhostAsSecureOrigin: true,
         });
       });
     </script>
