@@ -60,10 +60,9 @@ const AdminPanel = () => {
     }
   }, []);
 
-  // --- PRUEBA NATIVA (SIN ONESIGNAL) ---
-  // Esta función usa el API estándar del navegador, igual que lo hacíamos antes.
+  // --- PRUEBA NATIVA (CORREGIDA PARA QUE SUENE SIEMPRE) ---
   const testNativeNotification = async () => {
-    log("⚡ Iniciando prueba nativa...");
+    log("⚡ Iniciando prueba...");
 
     // 1. Verificar soporte
     if (!("Notification" in window)) {
@@ -73,44 +72,47 @@ const AdminPanel = () => {
 
     // 2. Verificar estado actual
     if (Notification.permission === "granted") {
-      log("⚡ Enviando notificación directa...");
+      log("⚡ Enviando...");
       try {
-        // Intentamos registrar el SW primero para asegurar que funcione en PWA
-        // Nota: En iOS PWA, a veces navigator.serviceWorker.ready tarda.
-        // Si falla, el catch usará new Notification() estándar.
-        const registration = await navigator.serviceWorker.ready;
+        // Generamos un ID único usando la hora exacta para evitar que iOS las agrupe en silencio
+        const timestamp = new Date().toLocaleTimeString();
+        const uniqueTag = "test-" + Date.now();
 
-        // Usamos showNotification del Service Worker (Mejor para PWA)
-        await registration.showNotification("Prueba Nativa", {
-          body: "Si ves esto, el iPhone está PERMITIENDO notificaciones ✅",
-          icon: "/logo192.png",
-          vibrate: [200, 100, 200],
-        });
-        alert("Se envió la señal. ¿Sonó?");
+        // Usamos el Service Worker si está listo (Mejor para PWA iOS)
+        if ("serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.showNotification(`Prueba ${timestamp}`, {
+            body: "Si ves esto, las notificaciones funcionan ✅",
+            icon: "/logo192.png",
+            tag: uniqueTag, // IMPORTANTE: Tag único forzará una nueva alerta
+            renotify: true, // IMPORTANTE: Obliga a sonar de nuevo
+            vibrate: [200, 100, 200],
+          });
+        } else {
+          // Fallback estándar
+          new Notification(`Prueba ${timestamp}`, {
+            body: "Prueba sin Service Worker",
+            icon: "/logo192.png",
+            tag: uniqueTag,
+          });
+        }
+        log("✅ Enviada: " + timestamp);
       } catch (e) {
         console.error(e);
-        // Fallback al método simple
-        new Notification("Prueba Nativa Simple", {
-          body: "Prueba de fallback sin SW",
-          icon: "/logo192.png",
-        });
+        log("❌ Error: " + e.message);
+        alert("Error al enviar: " + e.message);
       }
     } else if (Notification.permission !== "denied") {
-      log("⚡ Pidiendo permiso nativo...");
+      log("⚡ Pidiendo permiso...");
       const permission = await Notification.requestPermission();
       if (permission === "granted") {
-        new Notification("¡Permiso Concedido!", {
-          body: "Ahora intenta enviar la prueba de nuevo.",
-          icon: "/logo192.png",
-        });
         setOsPermission(true);
+        testNativeNotification(); // Reintentar inmediatamente
       } else {
         alert("Permiso denegado por el usuario.");
       }
     } else {
-      alert(
-        "⚠️ El sistema dice DENIED (Bloqueado). Ve a Ajustes del iPhone > Notificaciones > Kroma Pro y actívalo.",
-      );
+      alert("⚠️ El sistema dice DENIED. Revisa Ajustes > Kroma Pro.");
     }
   };
 
@@ -136,7 +138,7 @@ const AdminPanel = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- 3. REALTIME (Tu código original que funcionaba) ---
+  // --- 3. REALTIME (CORREGIDO PARA SONAR SIEMPRE) ---
   useEffect(() => {
     if (!barberProfile?.id) return;
 
@@ -160,31 +162,35 @@ const AdminPanel = () => {
             .single();
 
           if (data) {
-            // Sonido
+            // Sonido en la web (si está abierta)
             new Audio(
               "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             )
               .play()
               .catch(() => {});
 
-            // Intento de notificación nativa inmediata
+            // Notificación Nativa Robusta
             if (Notification.permission === "granted") {
-              // Intentamos usar el SW si está disponible (más robusto en Android/iOS)
+              const title = "✂️ Nueva Cita Agendada";
+              const options = {
+                body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
+                icon: "/logo192.png",
+                tag: "cita-" + payload.new.id, // Tag único basado en el ID de la cita
+                renotify: true, // Obligar a sonar
+                data: { url: window.location.href }, // Meta data útil
+              };
+
+              // Intentar vía Service Worker (Mejor soporte iOS PWA)
               if ("serviceWorker" in navigator) {
-                navigator.serviceWorker.ready.then((registration) => {
-                  registration.showNotification("✂️ Nueva Cita Agendada", {
-                    body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
-                    icon: "/logo192.png",
-                    tag: "cita-nueva",
+                navigator.serviceWorker.ready
+                  .then((registration) => {
+                    registration.showNotification(title, options);
+                  })
+                  .catch(() => {
+                    new Notification(title, options);
                   });
-                });
               } else {
-                // Fallback clásico
-                new Notification("✂️ Nueva Cita Agendada", {
-                  body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
-                  icon: "/logo192.png",
-                  tag: "cita-nueva",
-                });
+                new Notification(title, options);
               }
             }
 
