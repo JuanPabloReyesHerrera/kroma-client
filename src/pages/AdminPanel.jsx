@@ -102,7 +102,7 @@ const AdminPanel = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // FUNCIÓN DEFINITIVA PARA IOS
+  // FUNCIÓN DEFINITIVA PARA IOS (VERSIÓN DIRECTA)
   const forcePermission = async () => {
     log("👆 Botón presionado...");
 
@@ -113,27 +113,39 @@ const AdminPanel = () => {
 
     window.OneSignalDeferred.push(async function (OneSignal) {
       try {
-        // A. Intentar método OptIn primero (Estándar v16)
-        log("Intentando Opt-In...");
-        await OneSignal.User.PushSubscription.optIn();
+        const currentPerm = OneSignal.Notifications.permission;
+        log(`Estado actual: ${currentPerm}`);
 
-        // B. Si el OptIn no disparó nada, forzamos el Prompt Nativo
-        // Esperamos 800ms para no saturar el hilo
-        setTimeout(async () => {
-          const currentPerm = OneSignal.Notifications.permission;
-          if (currentPerm === "default") {
-            log("Forzando Prompt Nativo...");
-            const accepted = await OneSignal.Notifications.requestPermission();
-            log(accepted ? "✅ Aceptado" : "❌ Rechazado/Cerrado");
-          } else if (currentPerm === "denied") {
-            alert("⚠️ Tienes las notificaciones bloqueadas en Ajustes iOS.");
-          } else {
-            log("Ya tienes permisos ✅");
-          }
-        }, 800);
+        // CASO 1: Ya tiene permiso
+        if (currentPerm === "granted") {
+          log("Ya tienes permisos ✅");
+          return;
+        }
+
+        // CASO 2: Está bloqueado en Ajustes
+        if (currentPerm === "denied") {
+          alert(
+            "⚠️ Tienes las notificaciones bloqueadas en Ajustes iOS. Debes activarlas manualmente.",
+          );
+          return;
+        }
+
+        // CASO 3: Estado 'default' (Pedir permiso)
+        // Eliminamos optIn() y vamos directo a requestPermission()
+        log("Solicitando Permiso Nativo...");
+        const accepted = await OneSignal.Notifications.requestPermission();
+
+        if (accepted) {
+          log("✅ Permiso ACEPTADO");
+          setOsPermission(true);
+          // Aseguramos que el usuario esté "suscrito" lógicamente
+          await OneSignal.User.PushSubscription.optIn();
+        } else {
+          log("❌ Permiso RECHAZADO o ignorado");
+        }
       } catch (e) {
         log("Error crítico: " + e.message);
-        alert("Error: " + e.message);
+        console.error(e);
       }
     });
   };
