@@ -6,7 +6,7 @@ import {
   BarChart3,
   BellRing,
   Smartphone,
-  AlertTriangle,
+  Zap,
 } from "lucide-react";
 
 // Componentes locales
@@ -32,61 +32,23 @@ const AdminPanel = () => {
   const [password, setPassword] = useState("");
 
   // ESTADOS DE DEBUGGING PARA IOS
-  const [debugLog, setDebugLog] = useState("Iniciando...");
+  const [debugLog, setDebugLog] = useState("Listo para probar");
   const [osPermission, setOsPermission] = useState(false);
 
-  // Helper para escribir en pantalla (porque no tenemos consola en iPhone)
   const log = (msg) => {
     console.log(msg);
-    setDebugLog((prev) => msg); // Solo mostramos el último mensaje
+    setDebugLog(msg);
   };
 
-  // --- 1. CONFIGURACIÓN ONESIGNAL ROBUSTA ---
+  // --- 1. CONFIGURACIÓN ONESIGNAL (Mantenemos la escucha básica) ---
   useEffect(() => {
-    // A. TIMEOUT DE SEGURIDAD: Si en 5seg no carga, avisar
-    const timer = setTimeout(() => {
-      if (debugLog === "Iniciando...") {
-        log("⚠️ Alerta: El SDK tardó en responder. Verificando red...");
-      }
-    }, 5000);
-
-    // B. FORZAR REGISTRO DEL SW MANUALMENTE (Para desatascar iOS)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/OneSignalSDKWorker.js")
-        .then((registration) => {
-          console.log("✅ SW Forzado con éxito:", registration.scope);
-        })
-        .catch((err) => {
-          console.error("❌ Fallo SW Forzado:", err);
-          log("❌ Error SW Manual: " + err.message);
-        });
-    }
-
-    // C. INICIALIZACIÓN ESTÁNDAR
     if (window.OneSignalDeferred) {
       window.OneSignalDeferred.push(async function (OneSignal) {
-        clearTimeout(timer); // Cancelamos la alerta de timeout
-        log("OneSignal: Conectado ✅");
-
-        // 1. Verificar SW (Ahora debería estar activo por el registro manual)
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.ready.then((registration) => {
-            log("✅ SW Listo y Activo");
-          });
-        }
-
-        // 2. Chequear permiso actual
+        // Chequear permiso al cargar
         const permission = OneSignal.Notifications.permission;
         setOsPermission(permission === "granted");
+        log(`Estado Inicial: ${permission}`);
 
-        if (permission !== "granted") {
-          log(`Estado Permiso: ${permission}`);
-        } else {
-          log("✅ Notificaciones Activas");
-        }
-
-        // 3. Escuchar cambios
         OneSignal.Notifications.addEventListener(
           "permissionChange",
           (permission) => {
@@ -95,59 +57,61 @@ const AdminPanel = () => {
           },
         );
       });
-    } else {
-      log("Error Crítico: window.OneSignalDeferred no existe");
     }
-
-    return () => clearTimeout(timer);
   }, []);
 
-  // FUNCIÓN DEFINITIVA PARA IOS (VERSIÓN DIRECTA)
-  const forcePermission = async () => {
-    log("👆 Botón presionado...");
+  // --- PRUEBA NATIVA (SIN ONESIGNAL) ---
+  // Esta función usa el API estándar del navegador, igual que lo hacíamos antes.
+  const testNativeNotification = async () => {
+    log("⚡ Iniciando prueba nativa...");
 
-    if (!window.OneSignalDeferred) {
-      alert("El sistema de notificaciones no ha cargado aún.");
+    // 1. Verificar soporte
+    if (!("Notification" in window)) {
+      alert("Tu navegador no soporta notificaciones.");
       return;
     }
 
-    window.OneSignalDeferred.push(async function (OneSignal) {
+    // 2. Verificar estado actual
+    if (Notification.permission === "granted") {
+      log("⚡ Enviando notificación directa...");
       try {
-        const currentPerm = OneSignal.Notifications.permission;
-        log(`Estado actual: ${currentPerm}`);
+        // Intentamos registrar el SW primero para asegurar que funcione en PWA
+        // Nota: En iOS PWA, a veces navigator.serviceWorker.ready tarda.
+        // Si falla, el catch usará new Notification() estándar.
+        const registration = await navigator.serviceWorker.ready;
 
-        // CASO 1: Ya tiene permiso
-        if (currentPerm === "granted") {
-          log("Ya tienes permisos ✅");
-          return;
-        }
-
-        // CASO 2: Está bloqueado en Ajustes
-        if (currentPerm === "denied") {
-          alert(
-            "⚠️ Tienes las notificaciones bloqueadas en Ajustes iOS. Debes activarlas manualmente.",
-          );
-          return;
-        }
-
-        // CASO 3: Estado 'default' (Pedir permiso)
-        // Eliminamos optIn() y vamos directo a requestPermission()
-        log("Solicitando Permiso Nativo...");
-        const accepted = await OneSignal.Notifications.requestPermission();
-
-        if (accepted) {
-          log("✅ Permiso ACEPTADO");
-          setOsPermission(true);
-          // Aseguramos que el usuario esté "suscrito" lógicamente
-          await OneSignal.User.PushSubscription.optIn();
-        } else {
-          log("❌ Permiso RECHAZADO o ignorado");
-        }
+        // Usamos showNotification del Service Worker (Mejor para PWA)
+        await registration.showNotification("Prueba Nativa", {
+          body: "Si ves esto, el iPhone está PERMITIENDO notificaciones ✅",
+          icon: "/logo192.png",
+          vibrate: [200, 100, 200],
+        });
+        alert("Se envió la señal. ¿Sonó?");
       } catch (e) {
-        log("Error crítico: " + e.message);
         console.error(e);
+        // Fallback al método simple
+        new Notification("Prueba Nativa Simple", {
+          body: "Prueba de fallback sin SW",
+          icon: "/logo192.png",
+        });
       }
-    });
+    } else if (Notification.permission !== "denied") {
+      log("⚡ Pidiendo permiso nativo...");
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        new Notification("¡Permiso Concedido!", {
+          body: "Ahora intenta enviar la prueba de nuevo.",
+          icon: "/logo192.png",
+        });
+        setOsPermission(true);
+      } else {
+        alert("Permiso denegado por el usuario.");
+      }
+    } else {
+      alert(
+        "⚠️ El sistema dice DENIED (Bloqueado). Ve a Ajustes del iPhone > Notificaciones > Kroma Pro y actívalo.",
+      );
+    }
   };
 
   // --- 2. SESIÓN ---
@@ -172,7 +136,7 @@ const AdminPanel = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- 3. REALTIME ---
+  // --- 3. REALTIME (Tu código original que funcionaba) ---
   useEffect(() => {
     if (!barberProfile?.id) return;
 
@@ -196,19 +160,32 @@ const AdminPanel = () => {
             .single();
 
           if (data) {
+            // Sonido
             new Audio(
               "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
             )
               .play()
               .catch(() => {});
 
-            // Fallback visual si la app está abierta
+            // Intento de notificación nativa inmediata
             if (Notification.permission === "granted") {
-              new Notification("✂️ Nueva Cita Agendada", {
-                body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
-                icon: "/logo192.png",
-                tag: "cita-nueva",
-              });
+              // Intentamos usar el SW si está disponible (más robusto en Android/iOS)
+              if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.ready.then((registration) => {
+                  registration.showNotification("✂️ Nueva Cita Agendada", {
+                    body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
+                    icon: "/logo192.png",
+                    tag: "cita-nueva",
+                  });
+                });
+              } else {
+                // Fallback clásico
+                new Notification("✂️ Nueva Cita Agendada", {
+                  body: `${data.hora_inicio.slice(0, 5)} - ${data.clients?.nombre || "Cliente"}`,
+                  icon: "/logo192.png",
+                  tag: "cita-nueva",
+                });
+              }
             }
 
             fetchTodaysData(barberProfile.id);
@@ -315,26 +292,17 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        {/* BOTÓN + DEBUGGER (Solo visible si no hay permisos) */}
+        {/* ZONA DE PRUEBAS */}
         <div className="flex flex-col items-end">
-          {!osPermission ? (
-            <button
-              onClick={forcePermission}
-              className="p-2 bg-indigo-600 text-white rounded-full animate-bounce shadow-lg flex items-center gap-1"
-            >
-              <BellRing size={20} />
-            </button>
-          ) : (
-            <div className="p-2 bg-green-100 text-green-600 rounded-full">
-              <Smartphone size={20} />
-            </div>
-          )}
-
-          {/* LOG EN PANTALLA PARA IPHONE (DEBUGGING) */}
-          <span
-            className={`text-[9px] mt-1 font-mono px-2 py-0.5 rounded ${debugLog.includes("Error") || debugLog.includes("Alerta") ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}
+          <button
+            onClick={testNativeNotification}
+            className={`p-2 rounded-full shadow-lg flex items-center gap-1 transition-all active:scale-95 ${osPermission ? "bg-yellow-400 text-yellow-900" : "bg-slate-200 text-slate-500"}`}
           >
-            {debugLog.substring(0, 25)}...
+            <Zap size={20} fill="currentColor" />
+          </button>
+
+          <span className="text-[9px] mt-1 font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
+            {debugLog.substring(0, 20)}...
           </span>
         </div>
       </header>
