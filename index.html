@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- ANTI-CACHÉ: Forzamos al navegador a no guardar el HTML en caché durante desarrollo -->
+    <!-- ANTI-CACHÉ -->
     <meta
       http-equiv="Cache-Control"
       content="no-cache, no-store, must-revalidate"
@@ -11,38 +11,20 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
-    <!-- 1. ICONOS PARA IOS (IPHONE) - CON VERSIÓN ?v=2 PARA FORZAR RECARGA -->
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="./public/LogoApp.png?v=2"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="32x32"
-      href="./public/LogoApp.png?v=2"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="16x16"
-      href="./public/LogoApp.png?v=2"
-    />
+    <!-- 1. ICONOS CORREGIDOS (Quitamos '/public') -->
+    <!-- La ruta /LogoApp.png busca el archivo directamente en la raíz, que es donde Vite lo pone -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/LogoApp.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/LogoApp.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/LogoApp.png" />
 
-    <!-- 2. MANIFEST CON VERSIÓN ?v=2 (ESTO ES LA CLAVE) -->
-    <!-- Al cambiar el nombre del archivo (virtualmente), el navegador se ve obligado a bajarlo de nuevo -->
-    <link
-      rel="manifest"
-      href="/manifest.json?v=2"
-      crossorigin="use-credentials"
-    />
+    <!-- Manifest vinculado correctamente -->
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
 
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>Nueva Imagen</title>
+    <title>Kroma Tech Pro</title>
 
     <meta name="theme-color" content="#4f46e5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -60,8 +42,9 @@
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function (OneSignal) {
         await OneSignal.init({
-          appId: "128db51b-71f3-43aa-9013-216d850adf12",
-          safari_web_id: "",
+          appId: "128db51b-71f3-43aa-9013-216d850adf12", // Tu ID real
+          safari_web_id:
+            "web.onesignal.auto.64332252-c28f-4026-9069-1c9c45014389", // (Opcional si lo tienes)
           notifyButton: {
             enable: true,
           },
