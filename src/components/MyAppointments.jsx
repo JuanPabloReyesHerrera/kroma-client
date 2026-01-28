@@ -26,14 +26,14 @@ const MyAppointments = ({ onBack }) => {
       // 1. Primero buscamos el ID del cliente basado en el teléfono
       const { data: clientData, error: clientError } = await supabase
         .from("clients")
-        .select("id, nombre")
-        .eq("telefono", phone)
-        .single();
+        .select("id, nombre") // Seleccionamos el ID y nombre del cliente
+        .eq("telefono", phone) // Filtramos por el número de teléfono
+        .single(); // Esperamos un solo resultado
 
       if (clientError || !clientData) {
         setAppointments([]); // No existe el cliente
-        setSearched(true);
-        setLoading(false);
+        setSearched(true); // Indicamos que ya se realizó una búsqueda
+        setLoading(false); // Desactivamos el loading
         return;
       }
 
@@ -46,26 +46,45 @@ const MyAppointments = ({ onBack }) => {
         .select(
           `
             *,
-            sedes ( nombre ),
+            sedes ( nombre ), 
             barbers ( nombre )
         `,
         )
-        .eq("client_id", clientData.id)
+        .eq("client_id", clientData.id) // Filtrar por ID de cliente
+        .in("status", ["pending", "confirmed"]) // Solo pendientes o confirmadas
+        .neq("status", "cancelled") // Excluir canceladas
         .gte("fecha", today) // Mayor o igual a hoy
-        .order("fecha", { ascending: true })
-        .order("hora_inicio", { ascending: true });
+        .order("fecha", { ascending: true }) // Ordenar por fecha ascendente
+        .order("hora_inicio", { ascending: true }); // Ordenar por hora ascendente
 
       if (apptData) {
-        setAppointments(apptData);
+        setAppointments(apptData); // Guardar las citas encontradas
       } else {
-        setAppointments([]);
+        setAppointments([]); // No hay citas
       }
     } catch (err) {
-      console.error(err);
-      setAppointments([]);
+      console.error(err); // En caso de error, asumimos que no hay citas
+      setAppointments([]); // No hay citas
     } finally {
-      setLoading(false);
-      setSearched(true);
+      setLoading(false); // Siempre desactivamos el loading
+      setSearched(true); // Indicamos que ya se realizó una búsqueda
+    }
+  };
+  const handleCancel = async (appointmentId) => {
+    // Lógica para cancelar la cita con el ID proporcionado
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .eq("id", appointmentId);
+
+    if (error) {
+      alert("Error al cancelar la cita. Por favor, intenta de nuevo.");
+    } else {
+      // Actualizar la lista de citas en el estado
+      setAppointments((prevAppointments) =>
+        prevAppointments.filter((appt) => appt.id !== appointmentId),
+      );
+      alert("Cita cancelada exitosamente.");
     }
   };
 
@@ -123,61 +142,81 @@ const MyAppointments = ({ onBack }) => {
               </p>
             </div>
           ) : (
-            appointments.map((appt) => (
-              <div
-                key={appt.id}
-                className="bg-white border border-l-4 border-l-indigo-600 border-slate-100 p-5 rounded-2xl shadow-sm"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-lg">
-                      {appt.service_name_snapshot}
-                    </h3>
-                    <p className="text-indigo-600 font-bold text-sm">
-                      {appt.price_snapshot} BOB
-                    </p>
+            appointments
+              .filter((appt) => appt.status !== "cancelled")
+              .map((appt) => (
+                <div
+                  key={appt.id}
+                  className="bg-white border border-l-4 border-l-indigo-600 border-slate-100 p-5 rounded-2xl shadow-sm"
+                >
+                  {/* Encabezado con nombre del servicio, precio y estado */}
+                  <div className="flex justify-between items-start mb-3">
+                    {/* Nombre del servicio y precio */}
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-lg">
+                        {appt.service_name_snapshot}
+                      </h3>
+                      <p className="text-indigo-600 font-bold text-sm">
+                        {appt.price_snapshot} BOB
+                      </p>
+                    </div>
+                    {/*Estado de la cita*/}
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg ${
+                        appt.status === "confirmed"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-amber-50 text-amber-600"
+                      }`}
+                    >
+                      {appt.status === "pending" ? "Pendiente" : "Confirmada"}
+                    </span>
                   </div>
-                  <span
-                    className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg ${
-                      appt.status === "confirmed"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-amber-50 text-amber-600"
-                    }`}
-                  >
-                    {appt.status === "pending" ? "Pendiente" : "Confirmada"}
-                  </span>
+                  {/* Detalles de la cita */}
+                  <div className="space-y-2 text-sm text-slate-600 grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Calendar size={16} className="text-slate-400" />
+                        <span className="capitalize">
+                          {new Date(
+                            appt.fecha + "T00:00:00",
+                          ).toLocaleDateString("es-BO", {
+                            weekday: "long",
+                            day: "numeric",
+                            month: "long",
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-slate-400" />
+                        <span className="font-bold">
+                          {appt.hora_inicio.slice(0, 5)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Scissors size={16} className="text-slate-400" />
+                        <span>
+                          Barbero:{" "}
+                          <strong>
+                            {appt.barbers?.nombre || "Especialista"}
+                          </strong>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin size={16} className="text-slate-400" />
+                        <span>{appt.sedes?.nombre}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-end justify-end">
+                      <button
+                        className="bg-red-500 border border-red-600 border-l-2 text-white shadow-md font-bold px-8 py-3 rounded-lg hover:bg-red-700 transition-colors"
+                        onClick={() => handleCancel(appt.id)}
+                      >
+                        CANCELAR
+                      </button>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="space-y-2 text-sm text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-slate-400" />
-                    <span className="capitalize">
-                      {new Date(appt.fecha + "T00:00:00").toLocaleDateString(
-                        "es-BO",
-                        { weekday: "long", day: "numeric", month: "long" },
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock size={16} className="text-slate-400" />
-                    <span className="font-bold">
-                      {appt.hora_inicio.slice(0, 5)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Scissors size={16} className="text-slate-400" />
-                    <span>
-                      Barbero:{" "}
-                      <strong>{appt.barbers?.nombre || "Especialista"}</strong>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} className="text-slate-400" />
-                    <span>{appt.sedes?.nombre}</span>
-                  </div>
-                </div>
-              </div>
-            ))
+              ))
           )}
         </div>
       )}

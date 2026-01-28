@@ -85,7 +85,7 @@ function BookingFlow() {
     hour: null,
     day: null,
   });
-
+  // Logueamos el estado booking cada vez que cambie
   useEffect(() => {
     console.log("Estado actualizado:", booking);
   }, [booking]);
@@ -95,16 +95,17 @@ function BookingFlow() {
     setBooking({ ...booking, sede: sedeSelectioned });
     setStep(2);
   };
+  // Manejador de selección de categoría
   const handleCategorySelect = (categorySelection) => {
     setBooking({ ...booking, categoria: categorySelection });
     setStep(3);
   };
-
+  // Manejador de selección de servicio
   const handleServiceSelect = (serviceSelection) => {
     setBooking({ ...booking, servicio: serviceSelection });
     setStep(4);
   };
-
+  // Manejador de selección de barbero
   const handleBarberSelect = (barberSelected) => {
     setBooking({ ...booking, barber: barberSelected });
     // Al ser una promesa, el loading se manejará dentro de la función loadBarberShifts
@@ -113,6 +114,45 @@ function BookingFlow() {
     });
   };
 
+  // Función para verificar si el local está abierto
+  const checkIsOpen = () => {
+    // Obtenemos la fecha actual en la zona horaria de Bolivia
+    const boliviaTime = new Date(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/La_Paz",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+        hour12: false,
+      }).format(new Date()),
+    );
+
+    const day = boliviaTime.getDay(); // 0: Domingo, 1-6: Lunes-Sábado
+    const hour = boliviaTime.getHours();
+
+    // Lógica de horarios
+    if (day === 0) {
+      // Domingo
+      return hour >= 10 && hour < 16;
+    } else {
+      // Lunes a Sábado
+      return hour >= 8 && hour < 21;
+    }
+  };
+  const [isOpen, setIsOpen] = useState(checkIsOpen());
+
+  // Actualizamos el estado isOpen cada minuto
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsOpen(checkIsOpen());
+    }, 60000); // 60000 ms = 1 minuto
+
+    return () => clearInterval(interval); // Limpiamos el intervalo al desmontar
+  }, []);
+  // Manejador de selección de hora y fecha
   const handleHourSelect = (hourSelection) => {
     setBooking({
       ...booking,
@@ -122,7 +162,7 @@ function BookingFlow() {
     });
     setStep(6);
   };
-
+  // Manejador para volver al paso anterior
   const handleBack = () => {
     setStep(step - 1);
   };
@@ -251,12 +291,17 @@ function BookingFlow() {
             <div className="text-xs">
               <p>
                 <span className="font-bold">Estado del Local:</span>
-                <span className="font-bold text-indigo-400">
-                  {" "}
-                  Abierto {" " /* Indicador animado de abierto */}
-                  <span className="relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                <span
+                  className={`font-bold ml-1 ${isOpen ? "text-green-400" : "text-red-400"}`}
+                >
+                  {isOpen ? "Abierto" : "Cerrado"}
+                  <span className="relative ml-2">
+                    {isOpen && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    )}
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${isOpen ? "bg-green-500" : "bg-red-500"}`}
+                    ></span>
                   </span>
                 </span>
               </p>
