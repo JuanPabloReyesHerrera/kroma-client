@@ -7,7 +7,6 @@ import {
   Clock,
   MapPin,
   Scissors,
-  AlertCircle,
 } from "lucide-react";
 
 const MyAppointments = ({ onBack }) => {
@@ -49,7 +48,7 @@ const MyAppointments = ({ onBack }) => {
             *,
             sedes ( nombre ),
             barbers ( nombre )
-        `
+        `,
         )
         .eq("client_id", clientData.id)
         .gte("fecha", today) // Mayor o igual a hoy
@@ -155,7 +154,7 @@ const MyAppointments = ({ onBack }) => {
                     <span className="capitalize">
                       {new Date(appt.fecha + "T00:00:00").toLocaleDateString(
                         "es-BO",
-                        { weekday: "long", day: "numeric", month: "long" }
+                        { weekday: "long", day: "numeric", month: "long" },
                       )}
                     </span>
                   </div>

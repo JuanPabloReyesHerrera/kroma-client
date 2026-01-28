@@ -9,8 +9,8 @@
       "destination": "/manifest.json"
     },
     {
-      "source": "/logo192.png",
-      "destination": "/logo192.png"
+      "source": "/LogoApp.png",
+      "destination": "/LogoApp.png"
     },
     {
       "source": "/(.*)",

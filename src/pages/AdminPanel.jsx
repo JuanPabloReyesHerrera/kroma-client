@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase/conection";
-import {
-  User,
-  Calendar,
-  BarChart3,
-  BellRing,
-  Smartphone,
-  Zap,
-} from "lucide-react";
+import { User, Calendar, BarChart3, Zap } from "lucide-react";
 
 // Componentes locales
 import LoginAdmin from "../components/barberPanel/LoginAdmin";
@@ -50,13 +43,11 @@ const AdminPanel = () => {
         }
 
         // B. Escuchar cambios de permiso y suscripción
-        OneSignal.Notifications.addEventListener(
-          "permissionChange",
-          (permission) => {
+        ("permissionChange",
+          OneSignal.Notifications.addEventListener((permission) => {
             if (permission === "granted") setOsStatus("✅ Permitido");
             else setOsStatus("❌ Bloqueado");
-          },
-        );
+          }));
 
         OneSignal.User.PushSubscription.addEventListener("change", (event) => {
           setSubscriptionId(event.current.id);
@@ -161,6 +152,34 @@ const AdminPanel = () => {
                 renotify: true,
               });
             }
+            fetchTodaysData(barberProfile.id);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "appointments",
+          filter: `barber_id=eq.${barberProfile.id}`,
+        },
+        async (payload) => {
+          // Detectamos si el cambio fue a cancelado
+          if (
+            payload.new.status === "cancelled" &&
+            payload.old.status !== "cancelled"
+          ) {
+            const { data } = await supabase
+              .from("clients")
+              .select("nombre")
+              .eq("id", payload.new.client_id)
+              .single();
+
+            enviarNotificacion(
+              "❌ Cita Cancelada",
+              `El cliente ${data?.nombre || ""} ha cancelado su cita.`,
+            );
             fetchTodaysData(barberProfile.id);
           }
         },
